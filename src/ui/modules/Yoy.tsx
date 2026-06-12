@@ -176,24 +176,22 @@ function YoYTable({ title, sections }: { title: string; sections: [string, YoYLi
               <th className="th text-right">Δ%</th>
             </tr>
           </thead>
-          <tbody>
-            {sections.map(([heading, lines]) => (
-              <tbody key={heading}>
-                <tr><td className="td font-semibold text-ink-muted bg-bg-raised/40" colSpan={5}>{heading}</td></tr>
-                {lines.map((l) => (
-                  <tr key={l.id}>
-                    <td className="td">{l.label}</td>
-                    <td className="td text-right"><Money value={l.prior} /></td>
-                    <td className="td text-right"><Money value={l.current} /></td>
-                    <td className="td text-right"><Money value={l.delta} colorByDirection signed /></td>
-                    <td className={cn('td text-right nums text-xs', l.deltaPct == null ? 'text-ink-faint' : l.deltaPct >= 0 ? 'text-credit' : 'text-debit')}>
-                      {l.deltaPct == null ? '—' : `${l.deltaPct > 0 ? '+' : ''}${l.deltaPct.toFixed(0)}%`}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            ))}
-          </tbody>
+          {sections.map(([heading, lines]) => (
+            <tbody key={heading}>
+              <tr><td className="td font-semibold text-ink-muted bg-bg-raised" colSpan={5}>{heading}</td></tr>
+              {lines.map((l) => (
+                <tr key={l.id}>
+                  <td className="td">{l.label}</td>
+                  <td className="td text-right"><Money value={l.prior} /></td>
+                  <td className="td text-right"><Money value={l.current} /></td>
+                  <td className="td text-right"><Money value={l.delta} colorByDirection signed /></td>
+                  <td className={cn('td text-right nums text-xs', l.deltaPct == null ? 'text-ink-faint' : l.deltaPct >= 0 ? 'text-credit' : 'text-debit')}>
+                    {l.deltaPct == null ? '—' : `${l.deltaPct > 0 ? '+' : ''}${l.deltaPct.toFixed(0)}%`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          ))}
         </table>
       </div>
     </motion.section>

@@ -1,58 +1,60 @@
 /** @type {import('tailwindcss').Config} */
+const v = (name) => `rgb(var(${name}) / <alpha-value>)`
+
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   darkMode: 'class',
   theme: {
     extend: {
       colors: {
-        // Dark-first audit-desk palette. Slate base, electric-indigo accent,
-        // semantic ledger colours (debit/credit/delta).
         bg: {
-          base: '#0a0c12',
-          panel: '#11141d',
-          raised: '#171b27',
-          hover: '#1d2230',
+          base: v('--bg-base'),
+          panel: v('--bg-panel'),
+          raised: v('--bg-raised'),
+          hover: v('--bg-hover'),
         },
         line: {
-          DEFAULT: '#232838',
-          strong: '#323a52',
+          DEFAULT: v('--line'),
+          strong: v('--line-strong'),
         },
         ink: {
-          DEFAULT: '#e7eaf3',
-          muted: '#9aa3bd',
-          faint: '#5e6781',
+          DEFAULT: v('--ink'),
+          muted: v('--ink-muted'),
+          faint: v('--ink-faint'),
         },
         accent: {
-          DEFAULT: '#6d7cff',
-          hover: '#8390ff',
-          soft: 'rgba(109,124,255,0.12)',
+          DEFAULT: v('--accent'),
+          hover: v('--accent-hover'),
+          soft: v('--accent-soft'),
+          ink: v('--accent-ink'),
         },
-        debit: '#f0708a',
-        credit: '#39c08a',
-        delta: '#f5b454',
-        good: '#39c08a',
-        warn: '#f5b454',
-        bad: '#f0708a',
+        debit: v('--debit'),
+        credit: v('--credit'),
+        delta: v('--delta'),
+        good: v('--good'),
+        warn: v('--warn'),
+        bad: v('--bad'),
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        sans: ['"Inter Variable"', 'Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       boxShadow: {
-        panel: '0 1px 0 0 rgba(255,255,255,0.03) inset, 0 8px 30px -12px rgba(0,0,0,0.6)',
-        glow: '0 0 0 1px rgba(109,124,255,0.4), 0 8px 40px -8px rgba(109,124,255,0.35)',
+        card: '0 1px 2px 0 rgb(16 24 40 / 0.04), 0 1px 3px 0 rgb(16 24 40 / 0.06)',
+        raised: '0 4px 12px -2px rgb(16 24 40 / 0.10), 0 2px 4px -2px rgb(16 24 40 / 0.06)',
+        pop: '0 12px 32px -8px rgb(16 24 40 / 0.18)',
+      },
+      borderRadius: {
+        card: '10px',
       },
       keyframes: {
         'fade-up': {
-          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '0%': { opacity: '0', transform: 'translateY(6px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
-        },
-        shimmer: {
-          '100%': { transform: 'translateX(100%)' },
         },
       },
       animation: {
-        'fade-up': 'fade-up 0.4s cubic-bezier(0.16,1,0.3,1)',
+        'fade-up': 'fade-up 0.28s cubic-bezier(0.16,1,0.3,1)',
       },
     },
   },

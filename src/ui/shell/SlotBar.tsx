@@ -6,8 +6,8 @@ import { cn } from '../lib/cn'
 export function SlotBar() {
   const { slots, activeSlotId, setActiveSlot, removeSlot } = useStore()
   return (
-    <div className="flex items-center gap-2 border-b border-line bg-bg-panel/40 px-5 py-2.5 overflow-x-auto">
-      <span className="text-[11px] uppercase tracking-wider text-ink-faint shrink-0">Datasets</span>
+    <div className="flex items-center gap-2 border-b border-line bg-bg-panel px-5 py-2.5 overflow-x-auto">
+      <span className="text-[11px] uppercase tracking-wide text-ink-faint shrink-0">Datasets</span>
       {slots.map((s) => (
         <button
           key={s.id}

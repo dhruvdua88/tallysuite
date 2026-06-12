@@ -9,6 +9,28 @@ import { ingestFile } from '../io/files'
 
 export type ModuleId = 'dashboard' | 'versiondiff' | 'consolidation' | 'yoy' | 'confirmations' | 'reviewer'
 
+export type Theme = 'light' | 'dark'
+
+function initialTheme(): Theme {
+  try {
+    const saved = localStorage.getItem('tallysuite_theme')
+    if (saved === 'light' || saved === 'dark') return saved
+  } catch {
+    /* ignore */
+  }
+  return 'light'
+}
+
+function applyTheme(theme: Theme) {
+  const root = document.documentElement
+  root.classList.toggle('dark', theme === 'dark')
+  try {
+    localStorage.setItem('tallysuite_theme', theme)
+  } catch {
+    /* ignore */
+  }
+}
+
 export interface Slot {
   id: string
   name: string
@@ -25,6 +47,7 @@ interface AppState {
   diffV2: string | null
   busy: boolean
   error: string | null
+  theme: Theme
 
   ingest: (files: FileList | File[]) => Promise<void>
   removeSlot: (id: string) => void
@@ -32,6 +55,7 @@ interface AppState {
   setActiveSlot: (id: string) => void
   setDiff: (which: 'v1' | 'v2', id: string) => void
   clearError: () => void
+  toggleTheme: () => void
 }
 
 let counter = 0
@@ -45,6 +69,7 @@ export const useStore = create<AppState>((set) => ({
   diffV2: null,
   busy: false,
   error: null,
+  theme: initialTheme(),
 
   ingest: async (files) => {
     set({ busy: true, error: null })
@@ -92,7 +117,16 @@ export const useStore = create<AppState>((set) => ({
   setActiveSlot: (id) => set({ activeSlotId: id }),
   setDiff: (which, id) => set(which === 'v1' ? { diffV1: id } : { diffV2: id }),
   clearError: () => set({ error: null }),
+  toggleTheme: () =>
+    set((s) => {
+      const theme: Theme = s.theme === 'light' ? 'dark' : 'light'
+      applyTheme(theme)
+      return { theme }
+    }),
 }))
+
+// Apply persisted theme on first load.
+applyTheme(initialTheme())
 
 export function useActiveSlot(): Slot | null {
   const { slots, activeSlotId } = useStore()

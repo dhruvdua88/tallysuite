@@ -1,11 +1,71 @@
+@import '@fontsource-variable/inter';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Professional, document-grade theme. Light by default (auditors read and print
+ * on white); a restrained dark mode is available via the .dark class. Colours are
+ * RGB triples consumed through Tailwind's rgb(var() / <alpha>) tokens.
+ */
 @layer base {
   :root {
+    --bg-base: 244 246 249; /* app canvas */
+    --bg-panel: 255 255 255; /* cards / statements */
+    --bg-raised: 248 250 252; /* nested panels */
+    --bg-hover: 240 243 247;
+
+    --line: 226 231 238;
+    --line-strong: 205 212 222;
+
+    --ink: 23 32 47; /* near-black slate */
+    --ink-muted: 84 96 116;
+    --ink-faint: 138 149 167;
+
+    --accent: 39 71 153; /* trustworthy navy-indigo */
+    --accent-hover: 31 58 130;
+    --accent-soft: 235 240 250;
+    --accent-ink: 255 255 255;
+
+    --debit: 185 51 49; /* muted ledger red */
+    --credit: 21 110 70; /* muted ledger green */
+    --delta: 168 110 20; /* amber */
+    --good: 21 110 70;
+    --warn: 168 110 20;
+    --bad: 185 51 49;
+
+    color-scheme: light;
+  }
+
+  .dark {
+    --bg-base: 13 17 24;
+    --bg-panel: 21 26 35;
+    --bg-raised: 27 33 44;
+    --bg-hover: 33 40 53;
+
+    --line: 38 46 60;
+    --line-strong: 54 64 82;
+
+    --ink: 226 231 240;
+    --ink-muted: 150 161 181;
+    --ink-faint: 102 113 134;
+
+    --accent: 122 146 235;
+    --accent-hover: 150 171 245;
+    --accent-soft: 31 41 64;
+    --accent-ink: 12 16 24;
+
+    --debit: 232 122 134;
+    --credit: 74 192 142;
+    --delta: 226 176 84;
+    --good: 74 192 142;
+    --warn: 226 176 84;
+    --bad: 232 122 134;
+
     color-scheme: dark;
   }
+
   html,
   body,
   #root {
@@ -13,72 +73,76 @@
   }
   body {
     @apply bg-bg-base text-ink font-sans antialiased;
-    background-image:
-      radial-gradient(900px 500px at 12% -8%, rgba(109, 124, 255, 0.10), transparent 60%),
-      radial-gradient(700px 420px at 110% 0%, rgba(57, 192, 138, 0.06), transparent 55%);
-    background-attachment: fixed;
+    font-feature-settings: 'cv05' 1, 'ss01' 1;
   }
-  /* tabular figures everywhere numbers live */
   .nums {
     font-variant-numeric: tabular-nums;
     font-feature-settings: 'tnum' 1;
+  }
+  h1, h2, h3 {
+    letter-spacing: -0.01em;
   }
 }
 
 @layer components {
   .panel {
-    @apply rounded-2xl border border-line bg-bg-panel/80 shadow-panel backdrop-blur-sm;
+    @apply rounded-card border border-line bg-bg-panel shadow-card;
   }
   .panel-raised {
-    @apply rounded-xl border border-line bg-bg-raised;
+    @apply rounded-lg border border-line bg-bg-raised;
   }
   .btn {
     @apply inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium
       transition-colors duration-150 focus:outline-none focus-visible:ring-2
-      focus-visible:ring-accent/60 disabled:opacity-40 disabled:pointer-events-none;
+      focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-bg-base
+      disabled:opacity-40 disabled:pointer-events-none;
   }
   .btn-primary {
-    @apply btn bg-accent text-white hover:bg-accent-hover shadow-[0_4px_20px_-6px_rgba(109,124,255,0.6)];
+    @apply btn bg-accent text-[rgb(var(--accent-ink))] hover:bg-accent-hover shadow-card;
   }
   .btn-ghost {
     @apply btn text-ink-muted hover:text-ink hover:bg-bg-hover;
   }
   .btn-soft {
-    @apply btn bg-accent-soft text-accent-hover hover:bg-accent/20;
+    @apply btn bg-accent-soft text-accent hover:bg-accent/10;
   }
   .chip {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-line px-2.5 py-1
+    @apply inline-flex items-center gap-1.5 rounded-md border border-line px-2 py-0.5
       text-xs font-medium text-ink-muted;
   }
   .stat-card {
-    @apply panel p-5 flex flex-col gap-1 relative overflow-hidden;
+    @apply panel p-4 flex flex-col gap-1;
   }
   .nav-item {
-    @apply flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-muted
+    @apply flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-ink-muted
       hover:text-ink hover:bg-bg-hover transition-colors cursor-pointer select-none;
   }
   .nav-item-active {
-    @apply text-ink bg-accent-soft border border-accent/30;
+    @apply text-accent bg-accent-soft;
   }
   .th {
-    @apply text-left text-[11px] font-semibold uppercase tracking-wider text-ink-faint px-3 py-2;
+    @apply text-left text-[11px] font-semibold uppercase tracking-wide text-ink-faint px-3 py-2.5;
   }
   .td {
-    @apply px-3 py-1.5 text-sm border-t border-line/60;
+    @apply px-3 py-2 text-sm border-t border-line/70;
+  }
+  /* financial-table niceties */
+  table.fin tbody tr:hover {
+    @apply bg-bg-hover/60;
   }
 }
 
-/* slim scrollbars */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 11px;
+  height: 11px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2a3043;
+  background: rgb(var(--line-strong));
   border-radius: 8px;
-  border: 2px solid transparent;
+  border: 3px solid transparent;
   background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a4258;
+  background: rgb(var(--ink-faint));
+  background-clip: content-box;
 }
