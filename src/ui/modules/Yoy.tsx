@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
-import { CalendarRange, TriangleAlert, ShieldCheck, FileSpreadsheet, Search } from 'lucide-react'
-import { useStore } from '../../state/store'
+import { Building2, CalendarRange, Check, TriangleAlert, ShieldCheck, FileSpreadsheet, Search } from 'lucide-react'
+import { useStore, type Slot } from '../../state/store'
 import {
   buildSeries,
   heatBucket,
@@ -54,11 +54,21 @@ export function Yoy() {
 
   const series = useMemo(() => (datasets.length >= 2 ? buildSeries(datasets) : null), [datasets])
 
+  const selectedSlots = useMemo(
+    () =>
+      chosen
+        .map((id) => slots.find((s) => s.id === id))
+        .filter((s): s is Slot => !!s),
+    [chosen, slots],
+  )
+
   const toggle = (id: string) =>
     setSelected((cur) => {
       const base = cur.length ? cur : defaultIds
       return base.includes(id) ? base.filter((x) => x !== id) : [...base, id]
     })
+
+  const selectCompany = (ids: string[]) => setSelected(ids)
 
   const [busy, setBusy] = useState(false)
   async function onExport() {
@@ -88,28 +98,7 @@ export function Yoy() {
         )}
       </div>
 
-      {/* period picker — multi-slot */}
-      <div className="panel p-4 space-y-2.5">
-        <div className="text-[11px] uppercase tracking-wide text-ink-faint">Periods · pick two or more of the same company</div>
-        <div className="flex flex-wrap gap-2">
-          {slots.map((s) => {
-            const on = chosen.includes(s.id)
-            return (
-              <button
-                key={s.id}
-                onClick={() => toggle(s.id)}
-                className={cn(
-                  'chip border transition-colors',
-                  on ? 'border-accent/50 bg-accent-soft text-accent-hover' : 'border-line text-ink-muted hover:bg-bg-raised',
-                )}
-              >
-                {fyLabel(s.dataset.meta.periodFrom, s.dataset.meta.periodTo) || s.dataset.meta.company}
-              </button>
-            )
-          })}
-          {slots.length === 0 && <span className="text-sm text-ink-faint">Load two or more exports to compare.</span>}
-        </div>
-      </div>
+      <PeriodSelector slots={slots} selectedIds={chosen} selectedSlots={selectedSlots} onToggle={toggle} onSelectCompany={selectCompany} />
 
       {datasets.length < 2 && slots.length > 0 && (
         <div className="panel px-4 py-3 text-sm text-ink-muted">Select at least two periods above to build the comparison.</div>
@@ -119,10 +108,13 @@ export function Yoy() {
         <>
           {/* guard */}
           {series.sameCompany ? (
-            <div className="panel px-5 py-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm">
-              <span className="flex items-center gap-2 text-good font-medium"><ShieldCheck size={16} /> {series.periods[0]?.company}</span>
+            <div className="panel px-5 py-3 flex flex-wrap items-center justify-between gap-x-5 gap-y-2 text-sm">
+              <span className="flex min-w-0 items-center gap-2 text-good font-medium">
+                <ShieldCheck size={16} className="shrink-0" />
+                <span className="truncate">{series.periods[0]?.company}</span>
+              </span>
               <span className="text-ink-muted">
-                {series.periods.length} periods · {formatDate(series.periods[0]?.periodTo ?? null)} → {formatDate(series.periods.at(-1)?.periodTo ?? null)}
+                {series.periods.length} periods selected · {formatDate(series.periods[0]?.periodTo ?? null)} to {formatDate(series.periods.at(-1)?.periodTo ?? null)}
               </span>
             </div>
           ) : (
@@ -170,6 +162,156 @@ export function Yoy() {
 }
 
 // ---------- cells ----------
+function companyKey(slot: Slot): string {
+  const nameKey = slot.dataset.meta.company.trim().toLowerCase()
+  return slot.dataset.meta.companyGuidPrefix || nameKey || slot.id
+}
+
+function periodRangeLabel(periodFrom: string | null, periodTo: string | null): string {
+  if (periodFrom && periodTo) return `${formatDate(periodFrom)} to ${formatDate(periodTo)}`
+  if (periodTo) return `up to ${formatDate(periodTo)}`
+  if (periodFrom) return `from ${formatDate(periodFrom)}`
+  return 'period not available'
+}
+
+function periodShortLabel(periodFrom: string | null, periodTo: string | null): string {
+  return fyLabel(periodFrom, periodTo) || formatDate(periodTo)
+}
+
+function PeriodSelector({
+  slots,
+  selectedIds,
+  selectedSlots,
+  onToggle,
+  onSelectCompany,
+}: {
+  slots: Slot[]
+  selectedIds: string[]
+  selectedSlots: Slot[]
+  onToggle: (id: string) => void
+  onSelectCompany: (ids: string[]) => void
+}) {
+  const groups = useMemo(() => {
+    const map = new Map<string, { key: string; company: string; slots: Slot[] }>()
+    for (const slot of slots) {
+      const key = companyKey(slot)
+      const existing = map.get(key)
+      if (existing) {
+        existing.slots.push(slot)
+      } else {
+        map.set(key, { key, company: slot.dataset.meta.company || slot.name, slots: [slot] })
+      }
+    }
+    return [...map.values()]
+      .map((group) => ({
+        ...group,
+        slots: [...group.slots].sort((a, b) =>
+          String(a.dataset.meta.periodTo ?? '').localeCompare(String(b.dataset.meta.periodTo ?? '')),
+        ),
+      }))
+      .sort((a, b) => a.company.localeCompare(b.company))
+  }, [slots])
+
+  return (
+    <section className="panel overflow-hidden">
+      <div className="border-b border-line px-5 py-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[11px] uppercase tracking-wide text-ink-faint">Company periods</div>
+            <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-sm text-ink-muted">
+              <CalendarRange size={15} className="text-accent" />
+              <span>{selectedSlots.length || 0} selected</span>
+              {selectedSlots.length > 0 && (
+                <span className="truncate">
+                  {selectedSlots.map((s) => periodShortLabel(s.dataset.meta.periodFrom, s.dataset.meta.periodTo)).join(' · ')}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {groups.length === 0 ? (
+        <div className="px-5 py-4 text-sm text-ink-faint">Load two or more exports to compare.</div>
+      ) : (
+        <div className="divide-y divide-line">
+          {groups.map((group) => {
+            const ids = group.slots.map((s) => s.id)
+            const selectedInGroup = ids.filter((id) => selectedIds.includes(id)).length
+            return (
+              <div key={group.key} className="px-5 py-4">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Building2 size={16} className="shrink-0 text-accent" />
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-ink">{group.company}</div>
+                      <div className="text-[11px] text-ink-faint">{selectedInGroup}/{ids.length} periods selected</div>
+                    </div>
+                  </div>
+                  {ids.length >= 2 && (
+                    <button
+                      type="button"
+                      onClick={() => onSelectCompany(ids)}
+                      className="btn-ghost px-2.5 py-1.5 text-xs"
+                    >
+                      Select company
+                    </button>
+                  )}
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {group.slots.map((slot) => {
+                    const on = selectedIds.includes(slot.id)
+                    const from = slot.dataset.meta.periodFrom
+                    const to = slot.dataset.meta.periodTo
+                    return (
+                      <button
+                        key={slot.id}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => onToggle(slot.id)}
+                        className={cn(
+                          'min-h-[86px] rounded-lg border px-3 py-2.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                          on ? 'border-accent/60 bg-accent-soft text-accent-hover' : 'border-line bg-bg-panel text-ink-muted hover:bg-bg-raised',
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-base font-semibold text-ink">{periodShortLabel(from, to)}</div>
+                            <div className="mt-1 text-xs leading-snug text-ink-muted">{periodRangeLabel(from, to)}</div>
+                          </div>
+                          <span
+                            className={cn(
+                              'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border',
+                              on ? 'border-accent bg-accent text-[rgb(var(--accent-ink))]' : 'border-line bg-bg-raised',
+                            )}
+                          >
+                            {on && <Check size={13} strokeWidth={3} />}
+                          </span>
+                        </div>
+                        <div className="mt-2 truncate text-[11px] text-ink-faint">{slot.dataset.meta.sourceFile}</div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function PeriodColumnHeader({ period }: { period: YoYSeries['periods'][number] }) {
+  return (
+    <div className="flex min-w-[142px] flex-col items-end gap-0.5 normal-case tracking-normal leading-tight">
+      <span className="max-w-[180px] truncate text-[11px] font-semibold uppercase tracking-wide text-ink-muted">{period.company}</span>
+      <span className="text-xs font-semibold text-ink">{periodShortLabel(period.periodFrom, period.periodTo)}</span>
+      <span className="text-[10px] font-medium text-ink-faint">{periodRangeLabel(period.periodFrom, period.periodTo)}</span>
+    </div>
+  )
+}
+
 function fmtCompact(p: Paise): string {
   const r = p / 100
   const a = Math.abs(r)
@@ -237,7 +379,7 @@ function HeatGrid({ block, periods, basis }: { block: SeriesBlock; periods: YoYS
           <thead>
             <tr>
               <th className="text-left">Particulars</th>
-              {periods.map((p, i) => <th key={i} className="num">{fyLabel(p.periodFrom, p.periodTo) || formatDate(p.periodTo)}</th>)}
+              {periods.map((p, i) => <th key={i} className="num"><PeriodColumnHeader period={p} /></th>)}
             </tr>
           </thead>
           {block.sections.map((sec) => (
@@ -312,7 +454,7 @@ function LedgerHeat({
           <thead>
             <tr>
               <th className="text-left">Ledger</th>
-              {periods.map((p, i) => <th key={i} className="num">{fyLabel(p.periodFrom, p.periodTo) || formatDate(p.periodTo)}</th>)}
+              {periods.map((p, i) => <th key={i} className="num"><PeriodColumnHeader period={p} /></th>)}
             </tr>
           </thead>
           {groups.map(([g, grows]) => (
@@ -378,7 +520,12 @@ async function exportSeries(series: YoYSeries) {
   const { exportTables } = await import('../../io/excel')
   const cols = [
     { header: 'Particulars', key: 'particulars', width: 40 },
-    ...series.periods.map((p, i) => ({ header: fyLabel(p.periodFrom, p.periodTo) || `P${i + 1}`, key: `p${i}`, width: 16, money: true })),
+    ...series.periods.map((p, i) => ({
+      header: `${p.company || `Company ${i + 1}`} · ${periodShortLabel(p.periodFrom, p.periodTo)}`,
+      key: `p${i}`,
+      width: 28,
+      money: true,
+    })),
   ]
   const blockRows = (block: SeriesBlock) =>
     block.sections.flatMap((sec) => [
