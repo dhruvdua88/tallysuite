@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-bg-base text-ink font-sans antialiased;
+    background-image:
+      radial-gradient(900px 500px at 12% -8%, rgba(109, 124, 255, 0.10), transparent 60%),
+      radial-gradient(700px 420px at 110% 0%, rgba(57, 192, 138, 0.06), transparent 55%);
+    background-attachment: fixed;
+  }
+  /* tabular figures everywhere numbers live */
+  .nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-2xl border border-line bg-bg-panel/80 shadow-panel backdrop-blur-sm;
+  }
+  .panel-raised {
+    @apply rounded-xl border border-line bg-bg-raised;
+  }
+  .btn {
+    @apply inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium
+      transition-colors duration-150 focus:outline-none focus-visible:ring-2
+      focus-visible:ring-accent/60 disabled:opacity-40 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn bg-accent text-white hover:bg-accent-hover shadow-[0_4px_20px_-6px_rgba(109,124,255,0.6)];
+  }
+  .btn-ghost {
+    @apply btn text-ink-muted hover:text-ink hover:bg-bg-hover;
+  }
+  .btn-soft {
+    @apply btn bg-accent-soft text-accent-hover hover:bg-accent/20;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-line px-2.5 py-1
+      text-xs font-medium text-ink-muted;
+  }
+  .stat-card {
+    @apply panel p-5 flex flex-col gap-1 relative overflow-hidden;
+  }
+  .nav-item {
+    @apply flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-muted
+      hover:text-ink hover:bg-bg-hover transition-colors cursor-pointer select-none;
+  }
+  .nav-item-active {
+    @apply text-ink bg-accent-soft border border-accent/30;
+  }
+  .th {
+    @apply text-left text-[11px] font-semibold uppercase tracking-wider text-ink-faint px-3 py-2;
+  }
+  .td {
+    @apply px-3 py-1.5 text-sm border-t border-line/60;
+  }
+}
+
+/* slim scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a3043;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a4258;
+}
