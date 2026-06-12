@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   XCircle,
   FileSpreadsheet,
+  FileWarning,
   ChevronDown,
   TriangleAlert,
   CalendarDays,
@@ -18,11 +19,21 @@ import {
   checkSummary,
   type Sch3LineResult,
   type CheckResult,
+  type Sch3Statements,
 } from '../../core/m3-sch3'
 import { type Paise } from '../../core/model/money'
+import type { SheetSpec } from '../../io/excel'
 import { Money } from '../components/atoms'
 import { formatDate, fyLabel } from '../lib/format'
 import { cn } from '../lib/cn'
+
+type ObservationRow = {
+  severity: 'Error' | 'Warning' | 'Info'
+  area: string
+  observation: string
+  detail: string
+  action: string
+}
 
 export function Consolidation() {
   const slots = useStore((s) => s.slots)
@@ -52,8 +63,25 @@ export function Consolidation() {
     }
   }
 
+  const [observationsBusy, setObservationsBusy] = useState(false)
+  async function onExportObservations() {
+    if (!result) return
+    setObservationsBusy(true)
+    try {
+      const { exportTables } = await import('../../io/excel')
+      await exportTables(buildObservationSheets(result.statements, result.checks), 'Schedule-III-Observations.xlsx')
+      toast.success('Schedule III observations exported')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Export failed')
+    } finally {
+      setObservationsBusy(false)
+    }
+  }
+
   const multi = chosen.length > 1
   const s = result?.statements
+  const summary = result ? checkSummary(result.checks) : null
+  const observations = result ? buildObservationRows(result.statements, result.checks) : []
 
   return (
     <div className="mx-auto max-w-[1100px] space-y-5">
@@ -62,10 +90,15 @@ export function Consolidation() {
           <Layers size={20} className="text-accent" />
           <h2 className="serif text-2xl font-semibold tracking-tight">Financial Statements</h2>
         </div>
-        {result && (
-          <button className="btn-primary" onClick={onExport} disabled={busy}>
-            <FileSpreadsheet size={16} /> {busy ? 'Exporting…' : 'Export workbook'}
-          </button>
+        {result && summary && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button className="btn-soft" onClick={onExportObservations} disabled={observationsBusy}>
+              <FileWarning size={16} /> {observationsBusy ? 'Exporting…' : 'Export observations'}
+            </button>
+            <button className="btn-primary" onClick={onExport} disabled={busy}>
+              <FileSpreadsheet size={16} /> {busy ? 'Exporting…' : 'Export workbook'}
+            </button>
+          </div>
         )}
       </div>
 
@@ -130,7 +163,7 @@ export function Consolidation() {
             </div>
           )}
 
-          <ChecksPanel checks={result.checks} />
+          <ReviewSummary checks={result.checks} observations={observations} />
 
           {/* BALANCE SHEET — full width */}
           <StatementCard
@@ -183,6 +216,96 @@ export function Consolidation() {
       )}
     </div>
   )
+}
+
+function severityFor(status: CheckResult['status']): ObservationRow['severity'] {
+  return status === 'fail' ? 'Error' : status === 'warn' ? 'Warning' : 'Info'
+}
+
+function actionFor(check: CheckResult): string {
+  if (check.id === 'bs-balances') return 'Review opening balances, profit routing, and unmapped/reclassified ledgers.'
+  if (check.id === 'consol-additivity') return 'Check selected entities and branch columns before using consolidated totals.'
+  if (check.id === 'profit-tieout') return 'Review P&L mapping and nominal ledger movement for the selected period.'
+  if (check.id === 'liab-debit') return 'Review whether debit balances under liability heads need reclassification.'
+  if (check.id === 'asset-credit') return 'Review whether credit balances under asset heads need reclassification.'
+  if (check.id === 'neg-cash') return 'Review bank overdraft, cash book sign, or current-liability classification.'
+  if (check.id === 'period-match') return 'Use entities with matching period-from and period-to dates.'
+  if (check.id === 'unmapped') return 'Map every unmapped ledger to the correct Schedule III head.'
+  return check.status === 'pass' ? 'No action required.' : 'Review and resolve before finalization.'
+}
+
+function buildObservationRows(s: Sch3Statements, checks: CheckResult[]): ObservationRow[] {
+  const rows: ObservationRow[] = checks
+    .filter((check) => check.status !== 'pass')
+    .map((check) => ({
+      severity: severityFor(check.status),
+      area: check.category,
+      observation: check.label,
+      detail: check.detail,
+      action: actionFor(check),
+    }))
+
+  if (s.unmapped.length > 0) {
+    rows.push(
+      ...s.unmapped.map((item) => ({
+        severity: 'Warning' as const,
+        area: 'Ledger mapping',
+        observation: 'Unmapped ledger',
+        detail: `${item.ledger} · ${item.branch} · ${formatObservationAmount(item.value)}`,
+        action: 'Assign this ledger to the correct Schedule III head.',
+      })),
+    )
+  }
+
+  if (rows.length === 0) {
+    rows.push({
+      severity: 'Info',
+      area: 'Review status',
+      observation: 'No open Schedule III observations',
+      detail: `${s.branches.join(' + ')} · ${formatDate(s.period.from)} to ${formatDate(s.period.to)}`,
+      action: 'Review statement presentation and notes before final issue.',
+    })
+  }
+  return rows
+}
+
+function buildObservationSheets(s: Sch3Statements, checks: CheckResult[]): SheetSpec[] {
+  const observations = buildObservationRows(s, checks)
+  const summary = checkSummary(checks)
+  return [
+    {
+      name: 'Observations',
+      columns: [
+        { header: 'Severity', key: 'severity', width: 12 },
+        { header: 'Area', key: 'area', width: 20 },
+        { header: 'Observation', key: 'observation', width: 42 },
+        { header: 'Detail', key: 'detail', width: 70 },
+        { header: 'Suggested Action', key: 'action', width: 58 },
+      ],
+      rows: observations,
+    },
+    {
+      name: 'Summary',
+      columns: [
+        { header: 'Field', key: 'field', width: 28 },
+        { header: 'Value', key: 'value', width: 72 },
+      ],
+      rows: [
+        { field: 'Entity / consolidation', value: s.branches.join(' + ') },
+        { field: 'Period', value: `${formatDate(s.period.from)} to ${formatDate(s.period.to)}` },
+        { field: 'Periods match', value: s.periodsMatch ? 'Yes' : 'No' },
+        { field: 'Checks passed', value: summary.pass },
+        { field: 'Warnings', value: summary.warn },
+        { field: 'Errors', value: summary.fail },
+        { field: 'Unmapped ledgers', value: s.unmapped.length },
+        { field: 'Balance sheet residual', value: formatObservationAmount(s.bsResidual.consolidated) },
+      ],
+    },
+  ]
+}
+
+function formatObservationAmount(value: Paise): string {
+  return `₹${(value / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
 }
 
 function colCount(multi: boolean, branches: number): number {
@@ -295,39 +418,113 @@ function ResidualNote({ value }: { value: Paise }) {
   )
 }
 
-function ChecksPanel({ checks }: { checks: CheckResult[] }) {
+function ReviewSummary({ checks, observations }: { checks: CheckResult[]; observations: ObservationRow[] }) {
   const [open, setOpen] = useState(false)
   const sum = checkSummary(checks)
+  const priority = observations.filter((o) => o.severity !== 'Info').slice(0, 4)
+  const status =
+    sum.fail > 0
+      ? { label: 'Needs correction', tone: 'bad' as const, icon: XCircle }
+      : sum.warn > 0
+        ? { label: 'Review required', tone: 'warn' as const, icon: AlertTriangle }
+        : { label: 'Ready for review', tone: 'good' as const, icon: CheckCircle2 }
+  const StatusIcon = status.icon
+
   return (
-    <div className="panel overflow-hidden">
-      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-3 px-5 py-3 hover:bg-bg-hover">
-        <span className="text-sm font-semibold">Validation</span>
-        <span className="chip border-good/40 text-good bg-good/10"><CheckCircle2 size={12} /> {sum.pass}</span>
-        {sum.warn > 0 && <span className="chip border-warn/40 text-warn bg-warn/10"><AlertTriangle size={12} /> {sum.warn}</span>}
-        {sum.fail > 0 && <span className="chip border-bad/40 text-bad bg-bad/10"><XCircle size={12} /> {sum.fail}</span>}
-        <ChevronDown size={16} className={cn('ml-auto text-ink-faint transition-transform', open && 'rotate-180')} />
-      </button>
-      {open && (
-        <div className="border-t border-line/60 divide-y divide-line/40">
-          {checks.map((c) => (
-            <div key={c.id} className="px-5 py-2.5 flex items-start gap-3 text-sm">
-              {c.status === 'pass' ? <CheckCircle2 size={15} className="text-good mt-0.5 shrink-0" /> : c.status === 'warn' ? <AlertTriangle size={15} className="text-warn mt-0.5 shrink-0" /> : <XCircle size={15} className="text-bad mt-0.5 shrink-0" />}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{c.label}</span>
-                  <span className="text-[10px] uppercase text-ink-faint">{c.category}</span>
-                </div>
-                <div className="text-xs text-ink-muted">{c.detail}</div>
-                {c.drill && c.drill.length > 0 && (
-                  <div className="mt-1 text-[11px] text-ink-faint space-y-0.5">
-                    {c.drill.map((d, i) => <div key={i}>{d}</div>)}
-                  </div>
-                )}
-              </div>
+    <section className="panel overflow-hidden">
+      <div className="border-b border-line px-5 py-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <StatusIcon size={18} className={cn(status.tone === 'bad' ? 'text-bad' : status.tone === 'warn' ? 'text-warn' : 'text-good')} />
+              <h3 className="serif text-lg font-semibold">Schedule III review</h3>
             </div>
-          ))}
+            <div className="mt-1 text-sm text-ink-muted">{status.label} · {observations.length} observation{observations.length === 1 ? '' : 's'} available for export</div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <ReviewCount label="Pass" value={sum.pass} tone="good" />
+            <ReviewCount label="Warn" value={sum.warn} tone="warn" />
+            <ReviewCount label="Fail" value={sum.fail} tone="bad" />
+          </div>
         </div>
-      )}
+      </div>
+
+      <div className="grid gap-3 px-5 py-4 lg:grid-cols-[1fr_0.8fr]">
+        <div className="space-y-2">
+          <div className="text-[11px] uppercase tracking-wide text-ink-faint">Priority observations</div>
+          {priority.length > 0 ? (
+            priority.map((o, i) => <ObservationItem key={`${o.observation}-${i}`} item={o} />)
+          ) : (
+            <div className="rounded-lg border border-good/30 bg-good/5 px-3 py-2 text-sm text-good">
+              No blocking Schedule III observations from automated checks.
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-line bg-bg-raised p-3">
+          <div className="text-[11px] uppercase tracking-wide text-ink-faint">Review focus</div>
+          <div className="mt-2 space-y-2 text-sm text-ink-muted">
+            <div>Review negative balances under asset/liability heads before finalization.</div>
+            <div>Resolve unmapped ledgers so notes and face statements stay clean.</div>
+            <div>Keep observation follow-up separate from face statement finalization.</div>
+          </div>
+        </div>
+      </div>
+
+      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 border-t border-line px-5 py-2.5 text-sm text-ink-muted hover:bg-bg-hover">
+        <ChevronDown size={16} className={cn('transition-transform', open && 'rotate-180')} />
+        {open ? 'Hide validation details' : 'Show validation details'}
+      </button>
+      {open && <ValidationDetails checks={checks} />}
+    </section>
+  )
+}
+
+function ReviewCount({ label, value, tone }: { label: string; value: number; tone: 'good' | 'warn' | 'bad' }) {
+  const color = tone === 'good' ? 'text-good' : tone === 'warn' ? 'text-warn' : 'text-bad'
+  return (
+    <div className="min-w-[70px] rounded-lg border border-line bg-bg-raised px-3 py-2 text-center">
+      <div className={cn('nums text-lg font-semibold', color)}>{value}</div>
+      <div className="text-[10px] uppercase tracking-wide text-ink-faint">{label}</div>
+    </div>
+  )
+}
+
+function ObservationItem({ item }: { item: ObservationRow }) {
+  const tone = item.severity === 'Error' ? 'bad' : item.severity === 'Warning' ? 'warn' : 'good'
+  return (
+    <div className={cn('rounded-lg border px-3 py-2', tone === 'bad' ? 'border-bad/35 bg-bad/5' : tone === 'warn' ? 'border-warn/35 bg-warn/5' : 'border-good/35 bg-good/5')}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={cn('chip', tone === 'bad' ? 'border-bad/40 bg-bad/10 text-bad' : tone === 'warn' ? 'border-warn/40 bg-warn/10 text-warn' : 'border-good/40 bg-good/10 text-good')}>{item.severity}</span>
+        <span className="text-sm font-medium text-ink">{item.observation}</span>
+        <span className="text-[11px] uppercase tracking-wide text-ink-faint">{item.area}</span>
+      </div>
+      <div className="mt-1 text-xs text-ink-muted">{item.detail}</div>
+      <div className="mt-1 text-xs text-ink-faint">{item.action}</div>
+    </div>
+  )
+}
+
+function ValidationDetails({ checks }: { checks: CheckResult[] }) {
+  return (
+    <div className="border-t border-line/60 divide-y divide-line/40">
+      {checks.map((c) => (
+        <div key={c.id} className="px-5 py-2.5 flex items-start gap-3 text-sm">
+          {c.status === 'pass' ? <CheckCircle2 size={15} className="text-good mt-0.5 shrink-0" /> : c.status === 'warn' ? <AlertTriangle size={15} className="text-warn mt-0.5 shrink-0" /> : <XCircle size={15} className="text-bad mt-0.5 shrink-0" />}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-medium">{c.label}</span>
+              <span className="text-[10px] uppercase text-ink-faint">{c.category}</span>
+            </div>
+            <div className="text-xs text-ink-muted">{c.detail}</div>
+            {c.drill && c.drill.length > 0 && (
+              <div className="mt-1 text-[11px] text-ink-faint space-y-0.5">
+                {c.drill.map((d, i) => <div key={i}>{d}</div>)}
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

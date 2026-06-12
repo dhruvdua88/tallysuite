@@ -41,6 +41,7 @@ export function Yoy() {
   const [threshold, setThreshold] = useState(50) // ₹ lakh
   const [query, setQuery] = useState('')
   const [showAll, setShowAll] = useState(false)
+  const [showPeriodGrid, setShowPeriodGrid] = useState(false)
 
   const chosen = selected.length ? selected : defaultIds
   const datasets = useMemo(
@@ -102,7 +103,17 @@ export function Yoy() {
       </div>
 
       <TwoExportSelector slots={slots} selectedSlots={selectedSlots} onSelectPair={(ids) => setSelected(ids)} />
-      <PeriodSelector slots={slots} selectedIds={chosen} selectedSlots={selectedSlots} onToggle={toggle} onSelectCompany={selectCompany} />
+      {showPeriodGrid ? (
+        <PeriodSelector slots={slots} selectedIds={chosen} selectedSlots={selectedSlots} onToggle={toggle} onSelectCompany={selectCompany} />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowPeriodGrid(true)}
+          className="btn-ghost text-xs"
+        >
+          Show advanced multi-period selection
+        </button>
+      )}
 
       {datasets.length < 2 && slots.length > 0 && (
         <div className="panel px-4 py-3 text-sm text-ink-muted">Select at least two periods above to build the comparison.</div>
@@ -232,6 +243,8 @@ function TwoExportSelector({
   )
   const firstId = selectedSlots[0]?.id ?? orderedSlots[0]?.id ?? ''
   const secondId = selectedSlots[1]?.id ?? orderedSlots.find((s) => s.id !== firstId)?.id ?? ''
+  const firstSlot = orderedSlots.find((slot) => slot.id === firstId) ?? null
+  const secondSlot = orderedSlots.find((slot) => slot.id === secondId) ?? null
 
   const updatePair = (side: 'first' | 'second', id: string) => {
     const otherId = side === 'first' ? secondId : firstId
@@ -258,7 +271,33 @@ function TwoExportSelector({
         <ChevronSeparator />
         <ZipPeriodSelect label="Compare ZIP / period" value={secondId} slots={orderedSlots.filter((s) => s.id !== firstId)} onChange={(id) => updatePair('second', id)} />
       </div>
+      {(firstSlot || secondSlot) && (
+        <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto_1fr] lg:items-stretch">
+          <SelectedZipCard label="Base" slot={firstSlot} />
+          <div className="hidden items-center justify-center text-ink-faint lg:flex">
+            <ArrowRight size={18} />
+          </div>
+          <SelectedZipCard label="Compare" slot={secondSlot} />
+        </div>
+      )}
     </section>
+  )
+}
+
+function SelectedZipCard({ label, slot }: { label: string; slot: Slot | null }) {
+  return (
+    <div className="rounded-lg border border-line bg-bg-raised px-3 py-3">
+      <div className="text-[10px] uppercase tracking-wide text-ink-faint">{label}</div>
+      {slot ? (
+        <>
+          <div className="mt-1 truncate text-sm font-semibold text-ink">{slot.dataset.meta.company}</div>
+          <div className="mt-1 text-xs text-ink-muted">{periodRangeLabel(slot.dataset.meta.periodFrom, slot.dataset.meta.periodTo)}</div>
+          <div className="mt-1 truncate text-[11px] text-ink-faint">{slot.dataset.meta.sourceFile}</div>
+        </>
+      ) : (
+        <div className="mt-2 text-sm text-ink-faint">Select a ZIP export.</div>
+      )}
+    </div>
   )
 }
 
