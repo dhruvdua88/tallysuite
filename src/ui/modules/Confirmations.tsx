@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { FileSignature, FileSpreadsheet, FileText, AlertTriangle } from 'lucide-react'
+import { FileSignature, FileSpreadsheet, FileText, FileDown, AlertTriangle } from 'lucide-react'
 import { useActiveSlot } from '../../state/store'
 import {
   buildConfirmations,
@@ -52,6 +52,24 @@ export function Confirmations() {
         periodTo: slot.dataset.meta.periodTo ?? '',
       })
       toast.success(`${summary.included} confirmation letters generated`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function exportOne(p: ConfirmationParty) {
+    if (!slot) return
+    setBusy(p.key)
+    try {
+      const { exportConfirmationLetters } = await import('../../io/word')
+      await exportConfirmationLetters([{ ...p, source: p.source === 'exclude' ? 'ledger' : p.source }], {
+        ...FIRM,
+        companyName: slot.dataset.meta.company,
+        periodTo: slot.dataset.meta.periodTo ?? '',
+      }, `Confirmation-${p.name.replace(/[^a-z0-9]+/gi, '_').slice(0, 40)}.docx`)
+      toast.success(`Letter for ${p.name} generated`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed')
     } finally {
@@ -170,6 +188,7 @@ export function Confirmations() {
                 <th className="th text-right">Difference</th>
                 <th className="th text-center">Source</th>
                 <th className="th text-right">Confirm</th>
+                <th className="th text-center">Letter</th>
               </tr>
             </thead>
             <tbody>
@@ -210,11 +229,21 @@ export function Confirmations() {
                       </select>
                     </td>
                     <td className="td text-right font-medium"><Money value={confirmAmount(p)} /></td>
+                    <td className="td text-center">
+                      <button
+                        onClick={() => exportOne(p)}
+                        disabled={busy !== null || p.source === 'exclude'}
+                        title={`Generate confirmation letter for ${p.name}`}
+                        className="btn-ghost p-1.5 disabled:opacity-30"
+                      >
+                        {busy === p.key ? <span className="text-[11px]">…</span> : <FileDown size={15} />}
+                      </button>
+                    </td>
                   </tr>
                 )
               })}
               {parties.length === 0 && (
-                <tr><td className="td text-ink-muted" colSpan={7}>No parties match the current filters.</td></tr>
+                <tr><td className="td text-ink-muted" colSpan={8}>No parties match the current filters.</td></tr>
               )}
             </tbody>
           </table>

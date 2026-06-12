@@ -28,19 +28,28 @@ export interface CaroApplicability {
   paidUpPlusReserves: Paise
   borrowings: Paise
   revenue: Paise
+  notHoldingOrSubOfPublic: boolean
   capitalUnderCrore: boolean
   borrowingsUnderCrore: boolean
   revenueUnderTenCrore: boolean
-  /** All three thresholds met ⇒ a small private company exempt from CARO. */
+  /**
+   * CARO 2020 Para 1(2)(iv): a private company is EXEMPT only if ALL FOUR hold —
+   * (a) not a holding/subsidiary of a public company, (b) capital+reserves ≤ ₹1 Cr,
+   * (c) borrowings ≤ ₹1 Cr, (d) revenue ≤ ₹10 Cr.
+   */
   likelyExempt: boolean
 }
 
-export function caroApplicability(s: Sch3Statements): CaroApplicability {
+export function caroApplicability(
+  s: Sch3Statements,
+  opts: { holdingOrSubsidiaryOfPublic?: boolean } = {},
+): CaroApplicability {
   const head = (id: string) =>
     [...s.bsAssets, ...s.bsEquityLiability, ...s.plIncome, ...s.plExpense].find((r) => r.line.id === id)?.consolidated ?? 0
   const paidUpPlusReserves = (head('share_capital') + head('reserves_surplus') + s.profitForYear.consolidated) as Paise
   const borrowings = (head('lt_borrowings') + head('st_borrowings')) as Paise
   const revenue = (head('revenue_ops') + head('other_income')) as Paise
+  const notHoldingOrSubOfPublic = !opts.holdingOrSubsidiaryOfPublic
   const capitalUnderCrore = Math.abs(paidUpPlusReserves) <= ONE_CRORE
   const borrowingsUnderCrore = Math.abs(borrowings) <= ONE_CRORE
   const revenueUnderTenCrore = Math.abs(revenue) <= TEN_CRORE
@@ -48,10 +57,11 @@ export function caroApplicability(s: Sch3Statements): CaroApplicability {
     paidUpPlusReserves,
     borrowings,
     revenue,
+    notHoldingOrSubOfPublic,
     capitalUnderCrore,
     borrowingsUnderCrore,
     revenueUnderTenCrore,
-    likelyExempt: capitalUnderCrore && borrowingsUnderCrore && revenueUnderTenCrore,
+    likelyExempt: notHoldingOrSubOfPublic && capitalUnderCrore && borrowingsUnderCrore && revenueUnderTenCrore,
   }
 }
 

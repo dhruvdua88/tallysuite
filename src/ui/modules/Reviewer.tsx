@@ -28,13 +28,14 @@ const FIRM = {
 
 export function Reviewer() {
   const slot = useActiveSlot()
+  const [holdingPublic, setHoldingPublic] = useState(false)
   const base = useMemo(() => {
     if (!slot) return null
     const statements = buildStatements([slot.dataset])
     const findings = runReview(statements, [slot.dataset])
-    const caro = caroApplicability(statements)
+    const caro = caroApplicability(statements, { holdingOrSubsidiaryOfPublic: holdingPublic })
     return { statements, findings, caro }
-  }, [slot])
+  }, [slot, holdingPublic])
 
   const [aiFindings, setAiFindings] = useState<ReviewFinding[]>([])
   const [aiBusy, setAiBusy] = useState(false)
@@ -129,7 +130,7 @@ export function Reviewer() {
       )}
 
       {/* CARO card */}
-      <CaroCard caro={base.caro} />
+      <CaroCard caro={base.caro} holdingPublic={holdingPublic} onToggleHolding={setHoldingPublic} />
 
       {/* severity summary */}
       <div className="flex flex-wrap gap-2">
@@ -147,21 +148,43 @@ export function Reviewer() {
   )
 }
 
-function CaroCard({ caro }: { caro: ReturnType<typeof caroApplicability> }) {
+function CaroCard({
+  caro,
+  holdingPublic,
+  onToggleHolding,
+}: {
+  caro: ReturnType<typeof caroApplicability>
+  holdingPublic: boolean
+  onToggleHolding: (v: boolean) => void
+}) {
   return (
     <div className="panel p-4">
       <div className="flex items-center gap-2 mb-3">
-        <h3 className="text-sm font-semibold">CARO 2020 applicability</h3>
+        <h3 className="serif text-base font-semibold">CARO 2020 applicability</h3>
         <Pill tone={caro.likelyExempt ? 'good' : 'warn'}>{caro.likelyExempt ? 'Likely exempt' : 'Likely applicable'}</Pill>
       </div>
-      <div className="grid sm:grid-cols-3 gap-3 text-sm">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+        <CaroToggle holdingPublic={holdingPublic} onToggle={onToggleHolding} ok={caro.notHoldingOrSubOfPublic} />
         <CaroLine label="Capital + Reserves" value={caro.paidUpPlusReserves} ok={caro.capitalUnderCrore} limit="≤ ₹1 Cr" />
         <CaroLine label="Borrowings" value={caro.borrowings} ok={caro.borrowingsUnderCrore} limit="≤ ₹1 Cr" />
         <CaroLine label="Revenue" value={caro.revenue} ok={caro.revenueUnderTenCrore} limit="≤ ₹10 Cr" />
       </div>
       <p className="text-xs text-ink-faint mt-3">
-        Exemption under para 1(2) needs the entity to be a private company meeting all three thresholds. Confirm company class before relying on this.
+        Para 1(2)(iv) exemption needs a private company meeting <b>all four</b> conditions. Confirm company class before relying on this.
       </p>
+    </div>
+  )
+}
+
+function CaroToggle({ holdingPublic, onToggle, ok }: { holdingPublic: boolean; onToggle: (v: boolean) => void; ok: boolean }) {
+  return (
+    <div className="panel-raised p-3">
+      <div className="text-[11px] uppercase tracking-wide text-ink-faint">Holding/sub of public co</div>
+      <label className="flex items-center gap-2 mt-1 cursor-pointer">
+        <input type="checkbox" checked={holdingPublic} onChange={(e) => onToggle(e.target.checked)} className="accent-[rgb(var(--accent))]" />
+        <span className="text-sm">{holdingPublic ? 'Yes' : 'No'}</span>
+      </label>
+      <div className={cn('text-xs mt-0.5', ok ? 'text-good' : 'text-warn')}>{ok ? '✓ not disqualified' : '✗ disqualifies exemption'}</div>
     </div>
   )
 }

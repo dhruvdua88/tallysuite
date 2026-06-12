@@ -1,4 +1,7 @@
 @import '@fontsource-variable/inter';
+@import '@fontsource/fraunces/400.css';
+@import '@fontsource/fraunces/500.css';
+@import '@fontsource/fraunces/600.css';
 
 @tailwind base;
 @tailwind components;
@@ -126,9 +129,33 @@
   .td {
     @apply px-3 py-2 text-sm border-t border-line/70;
   }
-  /* financial-table niceties */
+  .serif {
+    font-family: 'Fraunces', 'Georgia', serif;
+    letter-spacing: -0.01em;
+  }
+  /* financial statement table — generous, document-grade */
+  table.fin {
+    @apply w-full border-collapse;
+  }
+  table.fin th {
+    @apply text-[11px] font-semibold uppercase tracking-wide text-ink-faint px-5 py-3
+      border-b border-line bg-bg-raised/60 sticky top-0 z-10;
+  }
+  table.fin td {
+    @apply px-5 py-2.5 text-[13.5px] border-t border-line/60 align-middle;
+  }
+  table.fin td.num {
+    @apply text-right nums whitespace-nowrap tabular-nums;
+    min-width: 132px;
+  }
   table.fin tbody tr:hover {
-    @apply bg-bg-hover/60;
+    @apply bg-bg-hover/50;
+  }
+  table.fin tr.section td {
+    @apply bg-accent-soft/60 font-semibold text-ink uppercase text-[11px] tracking-wide;
+  }
+  table.fin tr.total td {
+    @apply font-bold border-t-2 border-line-strong;
   }
 }
 

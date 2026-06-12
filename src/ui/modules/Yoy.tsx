@@ -16,6 +16,7 @@ import { useStore } from '../../state/store'
 import { compareYears, type YoYLine, type Ratio, type LedgerMove } from '../../core/m4-yoy/yoy'
 import { formatINR } from '../../core/model/money'
 import { Money } from '../components/atoms'
+import { formatDate, fyLabel } from '../lib/format'
 import { cn } from '../lib/cn'
 
 export function Yoy() {
@@ -24,6 +25,7 @@ export function Yoy() {
   const [currentId, setCurrentId] = useState<string | null>(slots[1]?.id ?? slots[0]?.id ?? null)
   const prior = slots.find((s) => s.id === priorId)
   const current = slots.find((s) => s.id === currentId)
+  const sameSlot = prior && current && prior.id === current.id
 
   const result = useMemo(() => {
     if (!prior || !current || prior.id === current.id) return null
@@ -42,8 +44,8 @@ export function Yoy() {
         { header: 'Particulars', key: 'particulars', width: 38 },
         { header: 'Prior', key: 'prior', width: 18, money: true },
         { header: 'Current', key: 'current', width: 18, money: true },
-        { header: 'Δ', key: 'delta', width: 18, money: true },
-        { header: 'Δ %', key: 'deltaPct', width: 10 },
+        { header: 'Change', key: 'delta', width: 18, money: true },
+        { header: 'Change %', key: 'deltaPct', width: 10 },
       ]
       await exportTables(
         [
@@ -62,11 +64,11 @@ export function Yoy() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="mx-auto max-w-[1100px] space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <CalendarRange size={20} className="text-accent" />
-          <h2 className="text-xl font-bold tracking-tight">Year-on-Year</h2>
+          <h2 className="serif text-2xl font-semibold tracking-tight">Year-on-Year</h2>
         </div>
         {result && (
           <button className="btn-primary" onClick={onExport} disabled={busy}>
@@ -77,22 +79,36 @@ export function Yoy() {
 
       <div className="panel p-4 flex flex-wrap items-center gap-3">
         <Picker label="Prior year" value={priorId} onChange={setPriorId} />
-        <ArrowRight className="text-ink-faint" />
+        <ArrowRight className="text-ink-faint mt-5" />
         <Picker label="Current year" value={currentId} onChange={setCurrentId} />
       </div>
 
-      {!result && <div className="panel grid place-items-center py-16 text-sm text-ink-muted">Pick two periods of the same company.</div>}
+      {/* guidance / guard */}
+      {sameSlot && <Hint>Pick two <b>different</b> periods — prior year and current year — of the same company.</Hint>}
+      {!prior || !current ? <Hint>Select a prior-year and current-year export above to compare.</Hint> : null}
+      {result && !result.guard.sameCompany && (
+        <div className="panel border-bad/40 bg-bad/5 px-4 py-3 text-sm">
+          <div className="flex items-center gap-2 text-bad font-medium"><TriangleAlert size={16} /> These are two different companies.</div>
+          <div className="text-ink-muted mt-1">
+            Year-on-Year compares the <b>same</b> entity across two periods. Load last year's and this year's export of one company.
+            (Showing the comparison anyway, but movers and ratios will not be meaningful.)
+          </div>
+        </div>
+      )}
 
       {result && (
         <>
-          <div className={cn('panel px-4 py-3 flex flex-wrap items-center gap-4 text-sm', result.guard.warning && 'border-warn/40 bg-warn/5')}>
-            {result.guard.warning ? (
-              <span className="flex items-center gap-2 text-warn font-medium"><TriangleAlert size={16} /> {result.guard.warning}</span>
-            ) : (
-              <span className="flex items-center gap-2 text-good font-medium"><ShieldCheck size={16} /> {result.company} · sequential periods</span>
-            )}
-            <span className="text-ink-muted">{result.guard.priorPeriod} → {result.guard.currentPeriod}</span>
-          </div>
+          {result.guard.sameCompany && (
+            <div className="panel px-5 py-3.5 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm">
+              <span className="flex items-center gap-2 text-good font-medium"><ShieldCheck size={16} /> {result.company}</span>
+              <span className="text-ink-muted">
+                Comparing <b>{fyLabel(prior!.dataset.meta.periodFrom, prior!.dataset.meta.periodTo)}</b> ({formatDate(prior!.dataset.meta.periodTo)})
+                {' → '}
+                <b>{fyLabel(current!.dataset.meta.periodFrom, current!.dataset.meta.periodTo)}</b> ({formatDate(current!.dataset.meta.periodTo)})
+              </span>
+              {!result.guard.sequential && <span className="chip border-warn/40 bg-warn/10 text-warn"><TriangleAlert size={12} /> not consecutive years</span>}
+            </div>
+          )}
 
           {/* ratios */}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
@@ -107,13 +123,12 @@ export function Yoy() {
             <HeadStat line={result.totals.assets} label="Total Assets" />
           </div>
 
-          <div className="grid gap-5 lg:grid-cols-2">
-            <YoYTable title="Balance Sheet" sections={[['Equity & Liabilities', result.bsEquityLiability], ['Assets', result.bsAssets]]} />
-            <YoYTable title="Profit & Loss" sections={[['Income', result.plIncome], ['Expenses', result.plExpense]]} />
-          </div>
+          {/* full-width statements */}
+          <YoYTable title="Balance Sheet" priorLabel={fyLabel(prior!.dataset.meta.periodFrom, prior!.dataset.meta.periodTo) || 'Prior'} currentLabel={fyLabel(current!.dataset.meta.periodFrom, current!.dataset.meta.periodTo) || 'Current'} sections={[['Equity & Liabilities', result.bsEquityLiability], ['Assets', result.bsAssets]]} />
+          <YoYTable title="Profit & Loss" priorLabel={fyLabel(prior!.dataset.meta.periodFrom, prior!.dataset.meta.periodTo) || 'Prior'} currentLabel={fyLabel(current!.dataset.meta.periodFrom, current!.dataset.meta.periodTo) || 'Current'} sections={[['Income', result.plIncome], ['Expenses', result.plExpense]]} />
 
           <div className="grid gap-5 lg:grid-cols-3">
-            <MoverList title="Top movers" icon={TrendingUp} moves={result.topMovers} showDelta />
+            <MoverList title="Biggest movements" icon={TrendingUp} moves={result.topMovers} showDelta />
             <MoverList title="New ledgers" icon={Plus} moves={result.newLedgers} />
             <MoverList title="Closed ledgers" icon={Minus} moves={result.goneLedgers} usePrior />
           </div>
@@ -123,23 +138,20 @@ export function Yoy() {
   )
 }
 
+function Hint({ children }: { children: React.ReactNode }) {
+  return <div className="panel px-4 py-3 text-sm text-ink-muted">{children}</div>
+}
+
 function RatioCard({ r }: { r: Ratio }) {
   const fmt = (v: number | null) => (v == null ? '—' : r.unit === 'days' ? `${Math.round(v)}` : r.unit === '%' ? `${v.toFixed(1)}` : v.toFixed(2))
-  const improved =
-    r.prior != null && r.current != null
-      ? r.favourable === 'higher'
-        ? r.current >= r.prior
-        : r.current <= r.prior
-      : null
+  const improved = r.prior != null && r.current != null ? (r.favourable === 'higher' ? r.current >= r.prior : r.current <= r.prior) : null
   return (
     <div className="stat-card">
-      <div className="text-[11px] uppercase tracking-wider text-ink-faint">{r.name}</div>
-      <div className="flex items-baseline gap-2">
+      <div className="text-[11px] uppercase tracking-wide text-ink-faint">{r.name}</div>
+      <div className="flex items-baseline gap-1.5">
         <span className="text-ink-faint text-sm nums">{fmt(r.prior)}</span>
-        <ArrowRight size={12} className="text-ink-faint" />
-        <span className={cn('text-xl font-bold nums', improved == null ? '' : improved ? 'text-good' : 'text-bad')}>
-          {fmt(r.current)}
-        </span>
+        <ArrowRight size={11} className="text-ink-faint" />
+        <span className={cn('serif text-xl font-semibold nums', improved == null ? '' : improved ? 'text-good' : 'text-bad')}>{fmt(r.current)}</span>
         <span className="text-xs text-ink-faint">{r.unit}</span>
       </div>
     </div>
@@ -151,8 +163,8 @@ function HeadStat({ line, label, invertColor }: { line: YoYLine; label: string; 
   const good = invertColor ? !up : up
   return (
     <div className="stat-card">
-      <div className="text-[11px] uppercase tracking-wider text-ink-faint">{label}</div>
-      <div className="text-lg font-semibold nums"><Money value={line.current} /></div>
+      <div className="text-[11px] uppercase tracking-wide text-ink-faint">{label}</div>
+      <div className="serif text-lg font-semibold nums"><Money value={line.current} /></div>
       <div className={cn('text-xs flex items-center gap-1 nums', good ? 'text-good' : 'text-bad')}>
         {up ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
         {line.deltaPct == null ? formatINR(line.delta, { sign: true }) : `${line.deltaPct > 0 ? '+' : ''}${line.deltaPct.toFixed(1)}%`}
@@ -161,31 +173,31 @@ function HeadStat({ line, label, invertColor }: { line: YoYLine; label: string; 
   )
 }
 
-function YoYTable({ title, sections }: { title: string; sections: [string, YoYLine[]][] }) {
+function YoYTable({ title, priorLabel, currentLabel, sections }: { title: string; priorLabel: string; currentLabel: string; sections: [string, YoYLine[]][] }) {
   return (
     <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="panel overflow-hidden">
-      <div className="px-4 py-3 border-b border-line"><h3 className="text-sm font-semibold">{title}</h3></div>
+      <div className="px-5 py-3.5 border-b border-line"><h3 className="serif text-lg font-semibold">{title}</h3></div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="fin">
           <thead>
-            <tr className="text-[11px] uppercase tracking-wider text-ink-faint">
-              <th className="th">Particulars</th>
-              <th className="th text-right">Prior</th>
-              <th className="th text-right">Current</th>
-              <th className="th text-right">Δ</th>
-              <th className="th text-right">Δ%</th>
+            <tr>
+              <th>Particulars</th>
+              <th className="num">{priorLabel}</th>
+              <th className="num">{currentLabel}</th>
+              <th className="num">Change</th>
+              <th className="num">%</th>
             </tr>
           </thead>
           {sections.map(([heading, lines]) => (
             <tbody key={heading}>
-              <tr><td className="td font-semibold text-ink-muted bg-bg-raised" colSpan={5}>{heading}</td></tr>
+              <tr className="section"><td colSpan={5}>{heading}</td></tr>
               {lines.map((l) => (
                 <tr key={l.id}>
-                  <td className="td">{l.label}</td>
-                  <td className="td text-right"><Money value={l.prior} /></td>
-                  <td className="td text-right"><Money value={l.current} /></td>
-                  <td className="td text-right"><Money value={l.delta} colorByDirection signed /></td>
-                  <td className={cn('td text-right nums text-xs', l.deltaPct == null ? 'text-ink-faint' : l.deltaPct >= 0 ? 'text-credit' : 'text-debit')}>
+                  <td>{l.label}</td>
+                  <td className="num"><Money value={l.prior} /></td>
+                  <td className="num"><Money value={l.current} /></td>
+                  <td className="num"><Money value={l.delta} colorByDirection signed /></td>
+                  <td className={cn('num text-xs', l.deltaPct == null ? 'text-ink-faint' : l.deltaPct >= 0 ? 'text-credit' : 'text-debit')}>
                     {l.deltaPct == null ? '—' : `${l.deltaPct > 0 ? '+' : ''}${l.deltaPct.toFixed(0)}%`}
                   </td>
                 </tr>
@@ -198,26 +210,14 @@ function YoYTable({ title, sections }: { title: string; sections: [string, YoYLi
   )
 }
 
-function MoverList({
-  title,
-  icon: Icon,
-  moves,
-  showDelta,
-  usePrior,
-}: {
-  title: string
-  icon: typeof TrendingUp
-  moves: LedgerMove[]
-  showDelta?: boolean
-  usePrior?: boolean
-}) {
+function MoverList({ title, icon: Icon, moves, showDelta, usePrior }: { title: string; icon: typeof TrendingUp; moves: LedgerMove[]; showDelta?: boolean; usePrior?: boolean }) {
   return (
     <section className="panel p-4">
       <div className="flex items-center gap-2 mb-2"><Icon size={15} className="text-accent" /><h3 className="text-sm font-semibold">{title}</h3><span className="text-xs text-ink-faint">{moves.length}</span></div>
       <div className="space-y-1 max-h-[40vh] overflow-y-auto pr-1">
         {moves.map((m, i) => (
-          <div key={i} className="flex items-center justify-between text-xs py-0.5">
-            <span className="truncate max-w-[140px]">{m.name}</span>
+          <div key={i} className="flex items-center justify-between text-xs py-0.5 gap-2">
+            <span className="truncate flex-1">{m.name}</span>
             <Money value={showDelta ? m.delta : usePrior ? m.prior : m.current} colorByDirection={showDelta} signed={showDelta} />
           </div>
         ))}
@@ -231,14 +231,14 @@ function Picker({ label, value, onChange }: { label: string; value: string | nul
   const slots = useStore((s) => s.slots)
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[11px] uppercase tracking-wider text-ink-faint">{label}</span>
+      <span className="text-[11px] uppercase tracking-wide text-ink-faint">{label}</span>
       <select
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-line bg-bg-raised px-3 py-2 text-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 min-w-[200px]"
+        className="rounded-lg border border-line bg-bg-raised px-3 py-2 text-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 min-w-[220px]"
       >
         <option value="" disabled>select…</option>
-        {slots.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.dataset.meta.periodTo})</option>)}
+        {slots.map((s) => <option key={s.id} value={s.id}>{s.dataset.meta.company} ({fyLabel(s.dataset.meta.periodFrom, s.dataset.meta.periodTo)})</option>)}
       </select>
     </label>
   )
