@@ -80,6 +80,9 @@ const any = (chain: string[], ...needles: string[]) =>
   chain.some((g) => needles.some((n) => g.includes(n)))
 
 const RULES: Rule[] = [
+  // Special ledgers identified by NAME (may have no/blank group in some exports)
+  { id: 'reserves_surplus', test: (c) => /profit\s*(&|and)\s*loss/.test(c.ledgerName) },
+
   // P&L — match on primary group first (revenue/expense are nominal)
   { id: 'revenue_ops', test: (c) => c.primaryGroup.includes('sales') },
   { id: 'cost_materials', test: (c) => c.primaryGroup.includes('purchase') },
@@ -111,6 +114,9 @@ const RULES: Rule[] = [
   { id: 'other_cur_assets', test: (c) => c.primaryGroup.includes('current asset') },
   { id: 'other_nc_assets', test: (c) => any(c.groupChain, 'misc', 'miscellaneous') },
   { id: 'other_cur_liab', test: (c) => c.primaryGroup.includes('current liab') },
+  // Inter-branch / divisions balances — present as a current asset; the sign
+  // sanity check flags a credit balance (amount payable to branch) for reclass.
+  { id: 'other_cur_assets', test: (c) => any(c.groupChain, 'branch', 'division') },
 ]
 
 /** Full group chain (names, immediate parent first up to primary group). */

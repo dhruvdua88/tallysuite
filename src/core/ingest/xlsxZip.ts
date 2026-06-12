@@ -57,19 +57,25 @@ export async function parseTallyZip(
   return finishParse(rawTables, opts, report, startedAt)
 }
 
-/** Read all *.xlsx entries into row arrays keyed by table base-name. */
+/**
+ * Read all *.xlsx / *.csv entries into row arrays keyed by table base-name.
+ * The TSF exporter emits either format depending on version; both are accepted.
+ */
 async function readTables(zip: JSZip): Promise<Map<string, Row[]>> {
   const tables = new Map<string, Row[]>()
   const entries = Object.values(zip.files).filter(
-    (f) => !f.dir && f.name.toLowerCase().endsWith('.xlsx'),
+    (f) => !f.dir && /\.(xlsx|csv)$/i.test(f.name),
   )
   for (const entry of entries) {
+    const isCsv = /\.csv$/i.test(entry.name)
     const base = entry.name
       .split('/')
       .pop()!
-      .replace(/\.xlsx$/i, '')
-    const buf = await entry.async('arraybuffer')
-    const wb = XLSX.read(buf, { type: 'array' })
+      .replace(/\.(xlsx|csv)$/i, '')
+    const wb = isCsv
+      ? // strip a leading UTF-8 BOM so the first header (guid) isn't mangled
+        XLSX.read((await entry.async('string')).replace(/^﻿/, ''), { type: 'string', raw: true })
+      : XLSX.read(await entry.async('arraybuffer'), { type: 'array' })
     const sheetName = wb.SheetNames[0]
     if (!sheetName) {
       tables.set(base, [])
@@ -306,7 +312,7 @@ function normalizeVoucher(r: RawVoucher, guid: Guid): VoucherHeader {
 function normalizeBill(r: RawBill): BillAllocation {
   const led = str(r.ledger) ?? ''
   return {
-    guid: asGuid(String(r.guid)),
+    guid: asGuid(r.guid == null ? '' : String(r.guid)),
     ledger: led,
     ledgerKey: ledgerKey(led),
     billName: str(r.name),

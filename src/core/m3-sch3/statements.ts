@@ -85,6 +85,10 @@ export function buildStatements(datasets: NormalizedDataset[]): Sch3Statements {
   }
 
   const unmapped: UnmappedItem[] = []
+  // Opening balances sitting on nominal (P&L) ledgers are prior-period retained
+  // earnings, not current-year P&L. Route them to reserves so the BS ties to the
+  // trial balance exactly (PL heads themselves use movement only).
+  const plOpeningSigned = Array<number>(n).fill(0)
 
   datasets.forEach((ds, bi) => {
     const tb = tbs[bi]!
@@ -93,6 +97,7 @@ export function buildStatements(datasets: NormalizedDataset[]): Sch3Statements {
       const line = SCH3_BY_ID.get(id)
       // BS heads use closing; PL heads use movement (nominal year activity)
       const isPL = line?.section === 'PL'
+      if (isPL) plOpeningSigned[bi] = plOpeningSigned[bi]! + row.opening
       const signed = isPL ? row.movement : row.closing
       if (signed === 0) continue
 
@@ -145,6 +150,16 @@ export function buildStatements(datasets: NormalizedDataset[]): Sch3Statements {
 
   // inject profit into reserves so the BS balances
   const bsEquityLiability = eqLiabBase.map(toResult)
+
+  // fold nominal-ledger opening balances into Reserves & Surplus (eqLiab side)
+  const reservesRes = bsEquityLiability.find((r) => r.line.id === 'reserves_surplus')
+  if (reservesRes && plOpeningSigned.some((v) => v !== 0)) {
+    for (let i = 0; i < n; i++) {
+      const present = (plOpeningSigned[i]! * -assetOri[i]!) as Paise
+      reservesRes.perBranch[i] = (reservesRes.perBranch[i]! + present) as Paise
+    }
+    reservesRes.consolidated = sumArr(reservesRes.perBranch)
+  }
   const profitResult: Sch3LineResult = {
     line: PROFIT_LINE,
     perBranch: profitPerBranch,

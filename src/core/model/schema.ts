@@ -90,7 +90,8 @@ export type RawGroup = z.infer<typeof RawGroup>
 
 export const RawBill = z
   .object({
-    guid: z.union([z.string(), z.number()]),
+    // opening-bill-allocation rows are keyed by ledger, not a voucher guid
+    guid: z.union([z.string(), z.number()]).nullish(),
     ledger: cell,
     name: cell,
     amount: cell,
