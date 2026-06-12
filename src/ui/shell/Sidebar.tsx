@@ -5,6 +5,7 @@ import {
   CalendarRange,
   FileSignature,
   ShieldCheck,
+  ScrollText,
 } from 'lucide-react'
 import { useStore, type ModuleId } from '../../state/store'
 import { cn } from '../lib/cn'
@@ -12,9 +13,10 @@ import { cn } from '../lib/cn'
 const NAV: { id: ModuleId; label: string; icon: typeof LayoutDashboard; ready: boolean }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, ready: true },
   { id: 'versiondiff', label: 'Version Diff', icon: GitCompareArrows, ready: true },
-  { id: 'consolidation', label: 'Consolidation', icon: Layers, ready: false },
-  { id: 'yoy', label: 'Year-on-Year', icon: CalendarRange, ready: false },
-  { id: 'confirmations', label: 'Confirmations', icon: FileSignature, ready: false },
+  { id: 'consolidation', label: 'Consolidation', icon: Layers, ready: true },
+  { id: 'yoy', label: 'Year-on-Year', icon: CalendarRange, ready: true },
+  { id: 'confirmations', label: 'Confirmations', icon: FileSignature, ready: true },
+  { id: 'reviewer', label: 'Sch III Reviewer', icon: ScrollText, ready: true },
 ]
 
 export function Sidebar() {

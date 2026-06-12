@@ -15,10 +15,12 @@ dependency.
 | **Trial Balance engine** — shared spine (opening/movement/closing, group rollup) | ✅ done |
 | **Dashboard** — data-smell scan, ingestion health, voucher mix | ✅ done |
 | **M2 Version Diff** — Differential Trial Balance, voucher add/delete/modify, risk flags | ✅ done, golden-tested |
-| M3 Consolidation + Schedule III | ⏳ next (port from `tally-fin-statements`) |
-| M4 Year-on-Year | ⏳ |
-| M1 Confirmations (billwise/ledger) | ⏳ |
-| M5 Sch III Reviewer + Audit Report (DeepSeek optional) | ⏳ (port from `sch3-reviewer`) |
+| **M3 Consolidation + Schedule III** — group→Sch III mapping, multi-branch consol, check battery, Excel | ✅ done, balances to the paise |
+| **M4 Year-on-Year** — BS/P&L deltas, 5 ratios, movers/new/closed, Excel | ✅ done |
+| **M1 Confirmations** — billwise-vs-ledger grid + validation, docx letters + tracker | ✅ done |
+| **M5 Sch III Reviewer** — deterministic rule engine, CARO 2020, Auditor's Report docx, optional DeepSeek | ✅ done |
+
+All six modules run **offline**. DeepSeek (M5 AI review) is the only optional online call.
 
 See [SPEC.md](./SPEC.md) for the full engineering specification.
 

@@ -7,7 +7,7 @@ import type { NormalizedDataset } from '../core/model/dataset'
 import type { IngestionReport } from '../core/ingest/report'
 import { ingestFile } from '../io/files'
 
-export type ModuleId = 'dashboard' | 'versiondiff' | 'consolidation' | 'yoy' | 'confirmations'
+export type ModuleId = 'dashboard' | 'versiondiff' | 'consolidation' | 'yoy' | 'confirmations' | 'reviewer'
 
 export interface Slot {
   id: string
