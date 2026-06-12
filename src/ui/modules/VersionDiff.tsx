@@ -29,6 +29,7 @@ import {
 import { formatINR, type Paise } from '../../core/model/money'
 import { Money } from '../components/atoms'
 import { formatDate, fyLabel } from '../lib/format'
+import { heatStyle, magnitudeBucket } from '../lib/heat'
 import { cn } from '../lib/cn'
 
 export function VersionDiff() {
@@ -98,6 +99,10 @@ function DiffBody({ diff, v1, v2 }: { diff: VDiff; v1: Slot; v2: Slot }) {
     if (guidsForActiveKinds && !r.contributingGuids.some((g) => guidsForActiveKinds.has(g))) return false
     return true
   })
+
+  // heatmap intensity baseline: largest movement across all changed ledgers,
+  // stable regardless of the active search/kind filter.
+  const maxAbs = useMemo(() => diff.changedRows.reduce((m, r) => Math.max(m, Math.abs(r.delta)), 0), [diff.changedRows])
 
   const changes = diff.voucherChanges.filter((c) => {
     if (!kindActive(c.kind)) return false
@@ -235,7 +240,14 @@ function DiffBody({ diff, v1, v2 }: { diff: VDiff; v1: Slot; v2: Slot }) {
       {/* TB of Differences — full width */}
       <section className="panel overflow-hidden">
         <div className="flex items-center justify-between px-5 py-3 border-b border-line">
-          <h3 className="serif text-lg font-semibold">Trial Balance of Differences</h3>
+          <div className="flex items-center gap-4">
+            <h3 className="serif text-lg font-semibold">Trial Balance of Differences</h3>
+            <span className="hidden sm:flex items-center gap-1.5 text-[11px] text-ink-faint">
+              <span className="inline-block h-3 w-3 rounded-[3px]" style={{ background: '#97C459' }} />
+              <span className="inline-block h-3 w-3 rounded-[3px]" style={{ background: '#F09595' }} />
+              Δ shaded by size
+            </span>
+          </div>
           <button className="btn-ghost text-xs" onClick={() => setShowUnchanged((s) => !s)}>
             {showUnchanged ? <EyeOff size={14} /> : <Eye size={14} />}
             {showUnchanged ? 'Hide unchanged' : `Show all ${diff.tbRows.length}`}
@@ -265,7 +277,14 @@ function DiffBody({ diff, v1, v2 }: { diff: VDiff; v1: Slot; v2: Slot }) {
                   </td>
                   <td className="num"><Money value={r.v1Movement} /></td>
                   <td className="num"><Money value={r.v2Movement} /></td>
-                  <td className="num"><Money value={r.delta} colorByDirection signed /></td>
+                  {(() => {
+                    const st = heatStyle(magnitudeBucket(r.delta, maxAbs))
+                    return (
+                      <td className="num" style={{ background: st.bg, color: r.delta === 0 ? undefined : st.fg }}>
+                        <Money value={r.delta} signed className={r.delta === 0 ? undefined : '!text-inherit'} />
+                      </td>
+                    )
+                  })()}
                   <td className="num text-ink-faint">{r.contributingGuids.length || ''}</td>
                 </tr>
               ))}
