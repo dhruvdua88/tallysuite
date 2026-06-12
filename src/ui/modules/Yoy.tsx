@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
-import { Building2, CalendarRange, Check, TriangleAlert, ShieldCheck, FileSpreadsheet, Search } from 'lucide-react'
+import { ArrowRight, Building2, CalendarRange, Check, TriangleAlert, ShieldCheck, FileSpreadsheet, Search } from 'lucide-react'
 import { useStore, type Slot } from '../../state/store'
 import {
   buildSeries,
@@ -92,6 +92,7 @@ export function Yoy() {
         <div className="flex items-center gap-2.5">
           <CalendarRange size={20} className="text-accent" />
           <h2 className="serif text-2xl font-semibold tracking-tight">Year-on-Year</h2>
+          <span className="text-sm text-ink-faint">— compare two ZIP exports across periods</span>
         </div>
         {series && (
           <button className="btn-primary" onClick={onExport} disabled={busy}>
@@ -100,6 +101,7 @@ export function Yoy() {
         )}
       </div>
 
+      <TwoExportSelector slots={slots} selectedSlots={selectedSlots} onSelectPair={(ids) => setSelected(ids)} />
       <PeriodSelector slots={slots} selectedIds={chosen} selectedSlots={selectedSlots} onToggle={toggle} onSelectCompany={selectCompany} />
 
       {datasets.length < 2 && slots.length > 0 && (
@@ -191,6 +193,10 @@ function periodShortLabel(periodFrom: string | null, periodTo: string | null): s
   return fyLabel(periodFrom, periodTo) || formatDate(periodTo)
 }
 
+function slotOptionLabel(slot: Slot): string {
+  return `${slot.dataset.meta.company} · ${periodShortLabel(slot.dataset.meta.periodFrom, slot.dataset.meta.periodTo)} · ${slot.dataset.meta.sourceFile}`
+}
+
 function periodKey(periodFrom: string | null, periodTo: string | null): string {
   return `${periodFrom ?? '?'}|${periodTo ?? '?'}`
 }
@@ -202,6 +208,94 @@ function countDuplicatePeriods(slots: Slot[]): number {
     counts.set(key, (counts.get(key) ?? 0) + 1)
   }
   return [...counts.values()].filter((n) => n > 1).length
+}
+
+function TwoExportSelector({
+  slots,
+  selectedSlots,
+  onSelectPair,
+}: {
+  slots: Slot[]
+  selectedSlots: Slot[]
+  onSelectPair: (ids: string[]) => void
+}) {
+  const orderedSlots = useMemo(
+    () =>
+      [...slots].sort((a, b) => {
+        const byCompany = a.dataset.meta.company.localeCompare(b.dataset.meta.company)
+        if (byCompany !== 0) return byCompany
+        const byPeriod = String(a.dataset.meta.periodTo ?? '').localeCompare(String(b.dataset.meta.periodTo ?? ''))
+        if (byPeriod !== 0) return byPeriod
+        return a.dataset.meta.sourceFile.localeCompare(b.dataset.meta.sourceFile)
+      }),
+    [slots],
+  )
+  const firstId = selectedSlots[0]?.id ?? orderedSlots[0]?.id ?? ''
+  const secondId = selectedSlots[1]?.id ?? orderedSlots.find((s) => s.id !== firstId)?.id ?? ''
+
+  const updatePair = (side: 'first' | 'second', id: string) => {
+    const otherId = side === 'first' ? secondId : firstId
+    if (!id || !otherId || id === otherId) {
+      onSelectPair([id].filter(Boolean))
+      return
+    }
+    onSelectPair(side === 'first' ? [id, otherId] : [otherId, id])
+  }
+
+  return (
+    <section className="panel p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-[11px] uppercase tracking-wide text-ink-faint">Two ZIP period comparison</div>
+          <div className="mt-0.5 text-sm text-ink-muted">Loaded exports by ZIP file and accounting period.</div>
+        </div>
+        {selectedSlots.length > 2 && (
+          <span className="chip border-warn/40 bg-warn/10 text-warn">showing {selectedSlots.length} periods</span>
+        )}
+      </div>
+      <div className="grid gap-3 lg:grid-cols-[1fr_auto_1fr] lg:items-end">
+        <ZipPeriodSelect label="Base ZIP / period" value={firstId} slots={orderedSlots} onChange={(id) => updatePair('first', id)} />
+        <ChevronSeparator />
+        <ZipPeriodSelect label="Compare ZIP / period" value={secondId} slots={orderedSlots.filter((s) => s.id !== firstId)} onChange={(id) => updatePair('second', id)} />
+      </div>
+    </section>
+  )
+}
+
+function ZipPeriodSelect({
+  label,
+  value,
+  slots,
+  onChange,
+}: {
+  label: string
+  value: string
+  slots: Slot[]
+  onChange: (id: string) => void
+}) {
+  return (
+    <label className="flex min-w-0 flex-col gap-1">
+      <span className="text-[11px] uppercase tracking-wide text-ink-faint">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="min-w-0 rounded-lg border border-line bg-bg-raised px-3 py-2 text-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+      >
+        <option value="" disabled>select ZIP…</option>
+        {slots.map((slot) => (
+          <option key={slot.id} value={slot.id}>{slotOptionLabel(slot)}</option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+function ChevronSeparator() {
+  return (
+    <div className="hidden h-10 items-center justify-center text-ink-faint lg:flex">
+      <ArrowRight size={18} />
+    </div>
+  )
 }
 
 function PeriodSelector({
