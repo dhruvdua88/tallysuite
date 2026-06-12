@@ -23,8 +23,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      # npm install (not ci): the SheetJS CDN-tarball dep uses a URL spec that
-      # older npm rejects under the strict `npm ci` lockfile check.
+      # The SheetJS CDN-tarball dep uses a URL spec that npm 10 (bundled with the
+      # runner) mis-parses as "Invalid Version". npm 11 handles it (as locally).
+      - run: npm install -g npm@11
       - run: npm install --no-audit --no-fund
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
