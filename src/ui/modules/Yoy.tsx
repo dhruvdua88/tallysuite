@@ -13,6 +13,7 @@ import {
   type SeriesBlock,
   type RatioSeries,
 } from '../../core/m4-yoy/series'
+import { compareYears, type LedgerMove, type Ratio, type YoYLine, type YoYResult } from '../../core/m4-yoy/yoy'
 import type { Paise } from '../../core/model/money'
 import { fyLabel, formatDate } from '../lib/format'
 import { heatStyle } from '../lib/heat'
@@ -72,14 +73,25 @@ export function Yoy() {
   const selectCompany = (ids: string[]) => setSelected(ids)
 
   const duplicatePeriodCount = useMemo(() => countDuplicatePeriods(selectedSlots), [selectedSlots])
+  const pairComparison = useMemo(() => {
+    if (selectedSlots.length !== 2) return null
+    const [base, compare] = selectedSlots
+    if (!base || !compare) return null
+    return compareYears(base.dataset, compare.dataset)
+  }, [selectedSlots])
 
   const [busy, setBusy] = useState(false)
   async function onExport() {
-    if (!series) return
+    if (!series && !pairComparison) return
     setBusy(true)
     try {
-      await exportSeries(series)
-      toast.success('YoY workbook exported')
+      if (pairComparison) {
+        await exportPeriodDifference(pairComparison)
+        toast.success('Period difference workbook exported')
+      } else if (series) {
+        await exportSeries(series)
+        toast.success('YoY workbook exported')
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Export failed')
     } finally {
@@ -95,9 +107,9 @@ export function Yoy() {
           <h2 className="serif text-2xl font-semibold tracking-tight">Year-on-Year</h2>
           <span className="text-sm text-ink-faint">— compare two ZIP exports across periods</span>
         </div>
-        {series && (
+        {(series || pairComparison) && (
           <button className="btn-primary" onClick={onExport} disabled={busy}>
-            <FileSpreadsheet size={16} /> {busy ? 'Exporting…' : 'Export workbook'}
+            <FileSpreadsheet size={16} /> {busy ? 'Exporting…' : pairComparison ? 'Export period difference' : 'Export workbook'}
           </button>
         )}
       </div>
@@ -119,7 +131,9 @@ export function Yoy() {
         <div className="panel px-4 py-3 text-sm text-ink-muted">Select at least two periods above to build the comparison.</div>
       )}
 
-      {series && (
+      {pairComparison ? (
+        <PeriodDifference result={pairComparison} />
+      ) : series && (
         <>
           {duplicatePeriodCount > 0 && (
             <div className="panel border-warn/40 bg-warn/5 px-4 py-3 text-sm">
@@ -334,6 +348,148 @@ function ChevronSeparator() {
     <div className="hidden h-10 items-center justify-center text-ink-faint lg:flex">
       <ArrowRight size={18} />
     </div>
+  )
+}
+
+function PeriodDifference({ result }: { result: YoYResult }) {
+  const lines = [
+    result.totals.assets,
+    result.totals.equityLiability,
+    result.totals.income,
+    result.totals.expense,
+    result.profit,
+  ]
+  return (
+    <>
+      <div className={cn('panel px-5 py-3 flex flex-wrap items-center justify-between gap-x-5 gap-y-2 text-sm', result.guard.warning && 'border-warn/40 bg-warn/5')}>
+        <span className={cn('flex min-w-0 items-center gap-2 font-medium', result.guard.warning ? 'text-warn' : 'text-good')}>
+          {result.guard.warning ? <TriangleAlert size={16} className="shrink-0" /> : <ShieldCheck size={16} className="shrink-0" />}
+          <span className="truncate">{result.company}</span>
+        </span>
+        <span className="text-ink-muted">
+          {result.guard.priorPeriod} to {result.guard.currentPeriod}
+        </span>
+        {result.guard.warning && <span className="basis-full text-xs text-ink-muted">{result.guard.warning}</span>}
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-5">
+        {lines.map((line) => <DiffStat key={line.id} line={line} />)}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        {result.ratios.map((ratio) => <PairRatio key={ratio.name} ratio={ratio} />)}
+      </div>
+
+      <DifferenceTable title="Balance Sheet - Equity and Liabilities" rows={result.bsEquityLiability} />
+      <DifferenceTable title="Balance Sheet - Assets" rows={result.bsAssets} />
+      <DifferenceTable title="Profit and Loss - Income" rows={result.plIncome} />
+      <DifferenceTable title="Profit and Loss - Expenses" rows={result.plExpense} />
+      <LedgerMoves rows={result.topMovers} />
+    </>
+  )
+}
+
+function DiffStat({ line }: { line: YoYLine }) {
+  const up = line.delta >= 0
+  return (
+    <div className="stat-card">
+      <div className="text-[11px] uppercase tracking-wide text-ink-faint">{line.label}</div>
+      <div className="text-xl font-semibold nums">{fmtCompact(line.current)}</div>
+      <div className={cn('text-xs nums', up ? 'text-good' : 'text-bad')}>
+        {up ? '+' : ''}{fmtCompact(line.delta)} {fmtPct(line.deltaPct)}
+      </div>
+    </div>
+  )
+}
+
+function PairRatio({ ratio }: { ratio: Ratio }) {
+  const fmt = (v: number | null) => (v == null ? '—' : ratio.unit === 'days' ? `${Math.round(v)}` : ratio.unit === '%' ? v.toFixed(1) : v.toFixed(2))
+  const delta = ratio.prior == null || ratio.current == null ? null : ratio.current - ratio.prior
+  const improved = delta == null ? null : ratio.favourable === 'higher' ? delta >= 0 : delta <= 0
+  return (
+    <div className="stat-card">
+      <div className="text-[11px] uppercase tracking-wide text-ink-faint">{ratio.name}</div>
+      <div className="flex items-baseline gap-1.5">
+        <span className={cn('serif text-xl font-semibold nums', improved == null ? '' : improved ? 'text-good' : 'text-bad')}>{fmt(ratio.current)}</span>
+        <span className="text-xs text-ink-faint">{ratio.unit}</span>
+      </div>
+      <div className="text-[10px] text-ink-faint nums">Base {fmt(ratio.prior)} → Compare {fmt(ratio.current)}</div>
+    </div>
+  )
+}
+
+function DifferenceTable({ title, rows }: { title: string; rows: YoYLine[] }) {
+  const shown = rows.filter((row) => row.prior !== 0 || row.current !== 0)
+  if (shown.length === 0) return null
+  return (
+    <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="panel overflow-hidden">
+      <div className="px-5 py-3.5 border-b border-line"><h3 className="serif text-lg font-semibold">{title}</h3></div>
+      <div className="overflow-x-auto">
+        <table className="fin w-full">
+          <thead>
+            <tr>
+              <th className="text-left">Particulars</th>
+              <th className="num">Base</th>
+              <th className="num">Compare</th>
+              <th className="num">Difference</th>
+              <th className="num">% Difference</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((row) => <DifferenceRow key={row.id} row={row} />)}
+          </tbody>
+        </table>
+      </div>
+    </motion.section>
+  )
+}
+
+function DifferenceRow({ row }: { row: YoYLine }) {
+  const up = row.delta >= 0
+  return (
+    <tr>
+      <td>{row.label}</td>
+      <td className="num">{fmtCompact(row.prior)}</td>
+      <td className="num">{fmtCompact(row.current)}</td>
+      <td className={cn('num font-medium', up ? 'text-good' : 'text-bad')}>{up ? '+' : ''}{fmtCompact(row.delta)}</td>
+      <td className={cn('num', up ? 'text-good' : 'text-bad')}>{fmtPct(row.deltaPct)}</td>
+    </tr>
+  )
+}
+
+function LedgerMoves({ rows }: { rows: LedgerMove[] }) {
+  if (rows.length === 0) return null
+  return (
+    <section className="panel overflow-hidden">
+      <div className="px-5 py-3.5 border-b border-line"><h3 className="serif text-lg font-semibold">Top ledger movements</h3></div>
+      <div className="overflow-x-auto">
+        <table className="fin w-full">
+          <thead>
+            <tr>
+              <th className="text-left">Ledger</th>
+              <th className="num">Base</th>
+              <th className="num">Compare</th>
+              <th className="num">Difference</th>
+              <th className="num">% Difference</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={`${row.group}-${row.name}`}>
+                <td>
+                  <div className="font-medium">{row.name}</div>
+                  <div className="text-[11px] text-ink-faint">{row.group}</div>
+                </td>
+                <td className="num">{fmtCompact(row.prior)}</td>
+                <td className="num">{fmtCompact(row.current)}</td>
+                <td className={cn('num font-medium', row.delta >= 0 ? 'text-good' : 'text-bad')}>{row.delta >= 0 ? '+' : ''}{fmtCompact(row.delta)}</td>
+                <td className={cn('num', row.delta >= 0 ? 'text-good' : 'text-bad')}>{fmtPct(row.deltaPct)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   )
 }
 
@@ -702,5 +858,110 @@ async function exportSeries(series: YoYSeries) {
       { name: 'Ledger matrix', columns: cols, rows: series.ledgers.map((row) => ({ particulars: row.label, ...periodCells(row.values) })) },
     ],
     'YoY-Comparison.xlsx',
+  )
+}
+
+async function exportPeriodDifference(result: YoYResult) {
+  const { exportTables } = await import('../../io/excel')
+  const diffCols = [
+    { header: 'Particulars', key: 'particulars', width: 42 },
+    { header: `Base (${result.guard.priorPeriod})`, key: 'prior', width: 18, money: true },
+    { header: `Compare (${result.guard.currentPeriod})`, key: 'current', width: 18, money: true },
+    { header: 'Difference', key: 'delta', width: 18, money: true },
+    { header: '% Difference', key: 'deltaPct', width: 14 },
+  ]
+  const lineRows = (rows: YoYLine[]) =>
+    rows
+      .filter((row) => row.prior !== 0 || row.current !== 0)
+      .map((row) => ({
+        particulars: row.label,
+        prior: row.prior / 100,
+        current: row.current / 100,
+        delta: row.delta / 100,
+        deltaPct: row.deltaPct == null ? '' : `${row.deltaPct.toFixed(2)}%`,
+      }))
+  const ledgerRows = result.topMovers.map((row) => ({
+    ledger: row.name,
+    group: row.group,
+    prior: row.prior / 100,
+    current: row.current / 100,
+    delta: row.delta / 100,
+    deltaPct: row.deltaPct == null ? '' : `${row.deltaPct.toFixed(2)}%`,
+  }))
+  const ratioRows = result.ratios.map((row) => ({
+    ratio: row.name,
+    base: row.prior == null ? '' : row.prior,
+    compare: row.current == null ? '' : row.current,
+    unit: row.unit,
+  }))
+
+  await exportTables(
+    [
+      {
+        name: 'Summary',
+        columns: [
+          { header: 'Field', key: 'field', width: 30 },
+          { header: 'Value', key: 'value', width: 80 },
+        ],
+        rows: [
+          { field: 'Company', value: result.company },
+          { field: 'Base period', value: result.guard.priorPeriod },
+          { field: 'Compare period', value: result.guard.currentPeriod },
+          { field: 'Same company', value: result.guard.sameCompany ? 'Yes' : 'No' },
+          { field: 'Sequential periods', value: result.guard.sequential ? 'Yes' : 'No' },
+          { field: 'Warning', value: result.guard.warning ?? '' },
+        ],
+      },
+      {
+        name: 'Balance Sheet',
+        columns: diffCols,
+        rows: [
+          { particulars: 'Equity and Liabilities', prior: null, current: null, delta: null, deltaPct: '' },
+          ...lineRows(result.bsEquityLiability),
+          { particulars: 'Assets', prior: null, current: null, delta: null, deltaPct: '' },
+          ...lineRows(result.bsAssets),
+        ],
+      },
+      {
+        name: 'Profit and Loss',
+        columns: diffCols,
+        rows: [
+          { particulars: 'Income', prior: null, current: null, delta: null, deltaPct: '' },
+          ...lineRows(result.plIncome),
+          { particulars: 'Expenses', prior: null, current: null, delta: null, deltaPct: '' },
+          ...lineRows(result.plExpense),
+          {
+            particulars: result.profit.label,
+            prior: result.profit.prior / 100,
+            current: result.profit.current / 100,
+            delta: result.profit.delta / 100,
+            deltaPct: result.profit.deltaPct == null ? '' : `${result.profit.deltaPct.toFixed(2)}%`,
+          },
+        ],
+      },
+      {
+        name: 'Ledger movements',
+        columns: [
+          { header: 'Ledger', key: 'ledger', width: 36 },
+          { header: 'Group', key: 'group', width: 28 },
+          { header: 'Base', key: 'prior', width: 18, money: true },
+          { header: 'Compare', key: 'current', width: 18, money: true },
+          { header: 'Difference', key: 'delta', width: 18, money: true },
+          { header: '% Difference', key: 'deltaPct', width: 14 },
+        ],
+        rows: ledgerRows,
+      },
+      {
+        name: 'Ratios',
+        columns: [
+          { header: 'Ratio', key: 'ratio', width: 28 },
+          { header: 'Base', key: 'base', width: 16 },
+          { header: 'Compare', key: 'compare', width: 16 },
+          { header: 'Unit', key: 'unit', width: 10 },
+        ],
+        rows: ratioRows,
+      },
+    ],
+    'Period-Difference.xlsx',
   )
 }
