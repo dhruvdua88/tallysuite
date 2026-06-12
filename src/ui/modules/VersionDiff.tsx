@@ -47,7 +47,7 @@ export function VersionDiff() {
       <div className="flex items-center gap-2.5">
         <GitCompareArrows size={20} className="text-accent" />
         <h2 className="serif text-2xl font-semibold tracking-tight">Version Diff</h2>
-        <span className="text-sm text-ink-faint">— Differential Trial Balance</span>
+        <span className="text-sm text-ink-faint">— compare two ZIP files for the same period</span>
       </div>
 
       <div className="panel p-4 flex flex-wrap items-end gap-3">
@@ -156,8 +156,8 @@ function DiffBody({ diff, v1, v2 }: { diff: VDiff; v1: Slot; v2: Slot }) {
             columns: [
               { header: 'Ledger', key: 'ledger', width: 34 },
               { header: 'Group', key: 'group', width: 24 },
-              { header: 'V1 Movement', key: 'v1', width: 16, money: true },
-              { header: 'V2 Movement', key: 'v2', width: 16, money: true },
+              { header: `V1 Movement - ${v1.dataset.meta.sourceFile}`, key: 'v1', width: 28, money: true },
+              { header: `V2 Movement - ${v2.dataset.meta.sourceFile}`, key: 'v2', width: 28, money: true },
               { header: 'Δ', key: 'delta', width: 16, money: true },
               { header: 'Vouchers', key: 'vouchers', width: 10 },
             ],
@@ -324,15 +324,17 @@ function DiffBody({ diff, v1, v2 }: { diff: VDiff; v1: Slot; v2: Slot }) {
 
 function GuardBanner({ diff }: { diff: VDiff }) {
   const g = diff.guard
-  const danger = !g.sameCompany
+  const danger = !g.sameCompany || !g.periodsMatch
   return (
     <div className={cn('panel px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm flex-1', danger && 'border-bad/40 bg-bad/5')}>
-      {danger ? (
+      {!g.sameCompany ? (
         <span className="flex items-center gap-2 text-bad font-medium"><TriangleAlert size={16} /> Different companies — diff may be meaningless</span>
+      ) : !g.periodsMatch ? (
+        <span className="flex items-center gap-2 text-bad font-medium"><TriangleAlert size={16} /> Periods differ — use Year-on-Year for period comparison</span>
       ) : (
-        <span className="flex items-center gap-2 text-good font-medium"><ShieldCheck size={16} /> Same company</span>
+        <span className="flex items-center gap-2 text-good font-medium"><ShieldCheck size={16} /> Same company and same period</span>
       )}
-      <span className="text-ink-muted">Periods: {g.periodsMatch ? 'match' : <span className="text-warn">differ</span>}</span>
+      <span className="text-ink-muted">Period: {g.v1Period}</span>
       {g.alterIdTxnMoved && (
         <span className="chip border-warn/40 bg-warn/10 text-warn">AlterID {g.v1AlterIdTxn?.toLocaleString()} → {g.v2AlterIdTxn?.toLocaleString()}</span>
       )}
@@ -473,15 +475,19 @@ function MiniStat({ label, value, highlight }: { label: string; value: Paise; hi
 function SlotPicker({ label, value, onChange }: { label: string; value: string | null; onChange: (id: string) => void }) {
   const slots = useStore((s) => s.slots)
   return (
-    <label className="flex flex-col gap-1">
+    <label className="flex min-w-[280px] flex-1 flex-col gap-1">
       <span className="text-[11px] uppercase tracking-wide text-ink-faint">{label}</span>
       <select
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-line bg-bg-raised px-3 py-2 text-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 min-w-[220px]"
+        className="rounded-lg border border-line bg-bg-raised px-3 py-2 text-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
       >
         <option value="" disabled>select…</option>
-        {slots.map((s) => <option key={s.id} value={s.id}>{s.dataset.meta.company} ({fyLabel(s.dataset.meta.periodFrom, s.dataset.meta.periodTo) || formatDate(s.dataset.meta.periodTo)})</option>)}
+        {slots.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.dataset.meta.company} · {fyLabel(s.dataset.meta.periodFrom, s.dataset.meta.periodTo) || formatDate(s.dataset.meta.periodTo)} · {s.dataset.meta.sourceFile}
+          </option>
+        ))}
       </select>
     </label>
   )

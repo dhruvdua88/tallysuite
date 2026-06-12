@@ -15,6 +15,7 @@ export interface SeriesPeriod {
   company: string
   periodFrom: string | null
   periodTo: string | null
+  sourceFile: string
 }
 
 export interface SeriesRow {
@@ -82,6 +83,7 @@ export function buildSeries(datasets: { slotId: string; dataset: NormalizedDatas
     company: d.dataset.meta.company,
     periodFrom: d.dataset.meta.periodFrom,
     periodTo: d.dataset.meta.periodTo,
+    sourceFile: d.dataset.meta.sourceFile,
   }))
 
   const guidPrefixes = new Set(

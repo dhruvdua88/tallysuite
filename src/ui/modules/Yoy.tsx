@@ -70,6 +70,8 @@ export function Yoy() {
 
   const selectCompany = (ids: string[]) => setSelected(ids)
 
+  const duplicatePeriodCount = useMemo(() => countDuplicatePeriods(selectedSlots), [selectedSlots])
+
   const [busy, setBusy] = useState(false)
   async function onExport() {
     if (!series) return
@@ -106,6 +108,17 @@ export function Yoy() {
 
       {series && (
         <>
+          {duplicatePeriodCount > 0 && (
+            <div className="panel border-warn/40 bg-warn/5 px-4 py-3 text-sm">
+              <div className="flex items-center gap-2 font-medium text-warn">
+                <TriangleAlert size={16} /> Same accounting period selected more than once.
+              </div>
+              <div className="mt-1 text-ink-muted">
+                Year-on-Year is for comparing different periods. To compare two ZIP files for the same period, use Version Diff.
+              </div>
+            </div>
+          )}
+
           {/* guard */}
           {series.sameCompany ? (
             <div className="panel px-5 py-3 flex flex-wrap items-center justify-between gap-x-5 gap-y-2 text-sm">
@@ -176,6 +189,19 @@ function periodRangeLabel(periodFrom: string | null, periodTo: string | null): s
 
 function periodShortLabel(periodFrom: string | null, periodTo: string | null): string {
   return fyLabel(periodFrom, periodTo) || formatDate(periodTo)
+}
+
+function periodKey(periodFrom: string | null, periodTo: string | null): string {
+  return `${periodFrom ?? '?'}|${periodTo ?? '?'}`
+}
+
+function countDuplicatePeriods(slots: Slot[]): number {
+  const counts = new Map<string, number>()
+  for (const slot of slots) {
+    const key = periodKey(slot.dataset.meta.periodFrom, slot.dataset.meta.periodTo)
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  return [...counts.values()].filter((n) => n > 1).length
 }
 
 function PeriodSelector({
@@ -308,6 +334,7 @@ function PeriodColumnHeader({ period }: { period: YoYSeries['periods'][number] }
       <span className="max-w-[180px] truncate text-[11px] font-semibold uppercase tracking-wide text-ink-muted">{period.company}</span>
       <span className="text-xs font-semibold text-ink">{periodShortLabel(period.periodFrom, period.periodTo)}</span>
       <span className="text-[10px] font-medium text-ink-faint">{periodRangeLabel(period.periodFrom, period.periodTo)}</span>
+      <span className="max-w-[180px] truncate text-[10px] font-medium text-ink-faint">{period.sourceFile}</span>
     </div>
   )
 }
@@ -521,9 +548,9 @@ async function exportSeries(series: YoYSeries) {
   const cols = [
     { header: 'Particulars', key: 'particulars', width: 40 },
     ...series.periods.map((p, i) => ({
-      header: `${p.company || `Company ${i + 1}`} · ${periodShortLabel(p.periodFrom, p.periodTo)}`,
+      header: `${p.company || `Company ${i + 1}`} · ${periodShortLabel(p.periodFrom, p.periodTo)} · ${p.sourceFile}`,
       key: `p${i}`,
-      width: 28,
+      width: 38,
       money: true,
     })),
   ]
